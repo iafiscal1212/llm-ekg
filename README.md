@@ -6,6 +6,7 @@
   <p align="center">
     <a href="https://zenodo.org/records/19284461"><img src="https://zenodo.org/badge/doi/10.5281/zenodo.19284461.svg" alt="DOI"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL_1.1-blue" alt="License"></a>
+    <a href="https://pypi.org/project/llm-ekg"><img src="https://img.shields.io/pypi/v/llm-ekg" alt="PyPI"></a>
     <a href="https://pypi.org/project/llm-ekg"><img src="https://img.shields.io/badge/python-3.9%2B-green" alt="Python"></a>
   </p>
   <p align="center">
