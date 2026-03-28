@@ -1,0 +1,292 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{authblk}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small LLM EKG v1.0}
+\lhead{\small Esteban, 2026}
+\cfoot{\thepage}
+
+\title{%
+\textbf{LLM EKG: A Mathematical Health Monitor\\for Large Language Models}\\[6pt]
+\large Signal-Based Detection of Degradation and Hallucination\\Without Natural Language Processing%
+}
+
+\author[1]{Carmen Esteban}
+\affil[1]{IAFISCAL \& PARTNERS, Madrid, Spain}
+\date{March 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present \textbf{LLM EKG}, an open-source tool for monitoring the behavioral health of Large Language Models (LLMs) in production. Unlike existing approaches that rely on semantic analysis, embeddings, or reference models, LLM EKG treats LLM outputs as \emph{numerical time series} and applies signal processing techniques to detect quality degradation, hallucination patterns, and behavioral drift. The system extracts 16 domain-agnostic numerical features per response, feeds them into a proprietary behavioral state engine, and produces anomaly scores, drift measurements, and multi-scale persistence analysis. A hallucination detection module identifies responses exhibiting high specificity combined with low epistemic hedging---a mathematical signature of fabricated content. All diagnostics are self-referential: every metric is compared against its own distribution within the session, requiring zero hardcoded thresholds. LLM EKG runs with only \texttt{numpy} and \texttt{matplotlib} as dependencies, processes conversations offline or monitors API calls in real time, and generates self-contained HTML reports. We validate the system on synthetic conversations with controlled degradation phases, demonstrating clear separation between healthy, degraded, and critical states.
+
+\medskip
+\noindent\textbf{Keywords:} LLM monitoring, model degradation, hallucination detection, signal processing, time series analysis, behavioral analysis.
+
+\medskip
+\noindent\textbf{Software:} \url{https://github.com/iafiscal1212/llm-ekg}\\
+\textbf{License:} Business Source License 1.1 (Apache 2.0 from 2030)
+\end{abstract}
+
+\section{Introduction}
+
+Large Language Models are deployed at unprecedented scale in production systems---from customer service to code generation, legal analysis, and medical triage. Yet there exists no standard methodology for \emph{continuously monitoring} the quality of their outputs over time. Current monitoring approaches typically focus on:
+
+\begin{itemize}[nosep]
+    \item \textbf{Prompt-level evaluation}: testing specific prompts against expected outputs, which does not capture gradual drift.
+    \item \textbf{Embedding-based similarity}: comparing outputs to reference embeddings, which requires a secondary model and introduces its own failure modes.
+    \item \textbf{Human evaluation}: expensive, slow, and non-scalable.
+    \item \textbf{LLM-as-judge}: using another LLM to evaluate outputs, creating circular dependencies.
+\end{itemize}
+
+All of these approaches share a fundamental limitation: they attempt to understand \emph{what} the model says. LLM EKG takes a radically different approach. We treat the model's outputs as a \emph{signal}---a time series of measurable numerical properties---and apply mathematical analysis techniques from signal processing and dynamical systems theory. We do not parse meaning. We measure structure.
+
+This paper describes the architecture, feature extraction pipeline, hallucination detection module, and validation methodology of LLM EKG v1.0.
+
+\section{System Architecture}
+
+LLM EKG consists of four stages:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Feature Extraction}: 16 numerical features per response, computed without NLP.
+    \item \textbf{Behavioral State Engine}: a proprietary dynamical system that tracks internal state, computes anomaly scores, and detects drift.
+    \item \textbf{Multi-Scale Persistence Analysis}: frequency-domain analysis across multiple scales to characterize trend persistence.
+    \item \textbf{Report Generation}: self-contained HTML with 9 diagnostic sections.
+\end{enumerate}
+
+The system processes responses sequentially (online) or in batch. For live monitoring, it provides transparent wrappers for OpenAI and Anthropic API clients.
+
+\subsection{Input Formats}
+
+LLM EKG auto-detects and parses five input formats:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Format} & \textbf{Extension} & \textbf{Source} \\
+\midrule
+ChatGPT export & \texttt{.json} & OpenAI data export \\
+Claude export & \texttt{.json} & Anthropic data export \\
+API log & \texttt{.csv} & Custom CSV \\
+JSONL & \texttt{.jsonl} & Structured logs \\
+Plain text & \texttt{.txt} & Blank-line separated \\
+\bottomrule
+\end{tabular}
+\caption{Supported input formats.}
+\end{table}
+
+\section{Feature Extraction}
+
+Each response is characterized by a vector $\mathbf{x} \in \mathbb{R}^{16}$ computed from surface-level textual properties. No tokenizer, embedding model, or language-specific parser is required.
+
+\subsection{Degradation Features (0--11)}
+
+The first 12 features capture structural properties that change during quality degradation:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{cll}
+\toprule
+\textbf{\#} & \textbf{Feature} & \textbf{Description} \\
+\midrule
+0 & \texttt{length\_chars} & Total character count \\
+1 & \texttt{length\_words} & Total word count \\
+2 & \texttt{vocab\_diversity} & $|\text{unique words}| / |\text{total words}|$ \\
+3 & \texttt{avg\_word\_length} & Mean word length in characters \\
+4 & \texttt{sentence\_count} & Number of sentences \\
+5 & \texttt{avg\_sentence\_length} & Words per sentence \\
+6 & \texttt{punctuation\_density} & Punctuation characters / total characters \\
+7 & \texttt{hedge\_ratio} & Epistemic hedging words / total words \\
+8 & \texttt{list\_ratio} & Bulleted/numbered lines / total lines \\
+9 & \texttt{code\_ratio} & Characters in code blocks / total characters \\
+10 & \texttt{repetition\_score} & Bigram Jaccard overlap with previous response \\
+11 & \texttt{response\_time\_s} & Response latency in seconds \\
+\bottomrule
+\end{tabular}
+\caption{Degradation features. Feature 7 uses a bilingual lexicon (English + Spanish) of 32 epistemic hedging markers.}
+\end{table}
+
+A model experiencing quality degradation typically exhibits: decreasing \texttt{length\_*}, decreasing \texttt{vocab\_diversity}, increasing \texttt{hedge\_ratio}, and increasing \texttt{repetition\_score}.
+
+\subsection{Hallucination Signature Features (12--15)}
+
+Features 12--15 capture the mathematical signature of hallucinated content:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{cll}
+\toprule
+\textbf{\#} & \textbf{Feature} & \textbf{Description} \\
+\midrule
+12 & \texttt{specificity\_score} & Concrete details (numbers, dates, \%, currencies) per sentence \\
+13 & \texttt{confidence\_mismatch} & Normalized specificity $\times$ (1 $-$ normalized hedging) \\
+14 & \texttt{assertion\_density} & Assertion words / (assertion + conditional words) \\
+15 & \texttt{self\_consistency} & Negation imbalance between response halves \\
+\bottomrule
+\end{tabular}
+\caption{Hallucination signature features.}
+\end{table}
+
+The key insight is that hallucinated responses exhibit a characteristic \emph{confidence mismatch}: they present fabricated specific details (high \texttt{specificity\_score}) with absolute certainty (low \texttt{hedge\_ratio}). An honest response that includes specific details typically also includes appropriate epistemic hedging. The \texttt{confidence\_mismatch} feature captures this discordance:
+
+\begin{equation}
+    \texttt{confidence\_mismatch} = \min\!\left(\frac{\texttt{specificity}}{3}, 1\right) \cdot \left(1 - \min(10 \cdot \texttt{hedge\_ratio}, 1)\right)
+\end{equation}
+
+The \texttt{assertion\_density} measures the ratio of declarative certainty words to conditional/uncertain words. The \texttt{self\_consistency} score detects internal contradictions through negation imbalance between the first and second halves of the response.
+
+\section{Behavioral State Engine}
+
+The feature vector $\mathbf{x}_t$ at each time step feeds into a proprietary behavioral state engine that maintains an internal hidden state $\mathbf{h}_t \in \mathbb{R}^{d_h}$ (with $d_h = 48$ for the 16-feature configuration). The engine computes:
+
+\begin{itemize}[nosep]
+    \item \textbf{Four behavioral metrics} ($M_0$--$M_3$): temporal memory, variability, persistence, and complexity of the observation-state interaction.
+    \item \textbf{Drift magnitude}: $\|\mathbf{h}_t - \mathbf{h}_{t-1}\|_2$, measuring sudden behavioral shifts.
+    \item \textbf{Anomaly score}: a composite z-score over drift, complexity change, memory drop, and state adaptation rate, computed against the running distribution (no fixed thresholds).
+\end{itemize}
+
+The anomaly score $a_t$ is only computed after a warm-up period of 20 steps, ensuring stable baseline statistics. The overall health score is:
+
+\begin{equation}
+    \text{Score}_{100} = \left\lfloor (1 - \bar{a}_{\text{recent}}) \times 100 \right\rfloor, \quad \bar{a}_{\text{recent}} = \text{mean}(a_{t})\text{ over the last 33\% of responses}
+\end{equation}
+
+with verdict thresholds at 80 (HEALTHY) and 50 (DEGRADED/CRITICAL).
+
+\section{Multi-Scale Persistence Analysis}
+
+For sessions with $\geq 32$ responses, LLM EKG performs frequency-domain analysis on each feature's temporal series:
+
+\begin{enumerate}[nosep]
+    \item Apply a Hanning window to the last 32 samples.
+    \item Compute the power spectrum via FFT.
+    \item Project power onto $N_s$ frequency bands (default: 6) positioned according to a proprietary multi-scale spacing derived from physical scaling laws.
+    \item Each band's energy is computed via Gaussian-weighted integration.
+    \item A persistence index $H \in (0, 1)$ is derived from the log-energy slope across bands.
+\end{enumerate}
+
+The persistence index characterizes the nature of change in each feature:
+\begin{itemize}[nosep]
+    \item $H > 0.55$: persistent trend (degradation is continuing).
+    \item $0.45 \leq H \leq 0.55$: random fluctuation (healthy).
+    \item $H < 0.45$: mean-reverting (self-correcting).
+\end{itemize}
+
+\section{Self-Referential Diagnostics}
+
+A critical design principle of LLM EKG is that \textbf{all diagnostics are data-driven}. No threshold is hardcoded. Each metric is evaluated against its own distribution within the session:
+
+\begin{itemize}[nosep]
+    \item \textbf{Trend}: ratio of mean anomaly in the second half vs.\ first half.
+    \item \textbf{Coherence}: coefficient of variation (CV) of the $M_0$ series.
+    \item \textbf{Complexity}: percentage change of $M_3$ between session halves.
+    \item \textbf{Hallucination outliers}: count of responses with \texttt{confidence\_mismatch} $> \mu + 2\sigma$ from the session baseline.
+\end{itemize}
+
+This design ensures that LLM EKG adapts to any model, any domain, and any conversation length without manual calibration.
+
+\section{Validation}
+
+\subsection{Synthetic Degradation Experiment}
+
+We generate 100 synthetic responses in three phases:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Normal} (responses 1--50): long, structurally diverse, low repetition, varied vocabulary.
+    \item \textbf{Degradation} (responses 51--80): progressively shorter, increasing hedging, restricted vocabulary, rising repetition.
+    \item \textbf{Critical} (responses 81--100): alternating between evasive hedging (``I hope this helps'') and hallucination (fabricated statistics with absolute certainty).
+\end{enumerate}
+
+\subsection{Results}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Normal (1--50)} & \textbf{Degraded (51--80)} & \textbf{Critical (81--100)} \\
+\midrule
+Anomaly score & $\sim 0.24$ & $\sim 0.28$ & $\sim 0.32$ \\
+Drift & 0.017 & 0.020 & 0.019 \\
+Hallucination risk & Low & Medium & High \\
+\bottomrule
+\end{tabular}
+\caption{Anomaly scores across synthetic phases. The system correctly identifies degradation onset and assigns increasing risk.}
+\end{table}
+
+The overall verdict for the 100-response session is \textbf{DEGRADED (74/100)} with a positive anomaly trend of $+0.165$, confirming that the system detects the progressive quality decline.
+
+The hallucination risk rises to 22.96\%, driven primarily by high \texttt{confidence\_mismatch} in the critical phase where Type B responses (fabricated details with absolute certainty) trigger the detection module.
+
+The mean persistence index across all features is 0.578 ($> 0.5$), indicating that the degradation trends are persistent rather than random.
+
+\section{Implementation}
+
+LLM EKG is implemented in Python with minimal dependencies:
+
+\begin{itemize}[nosep]
+    \item \texttt{numpy} $\geq 1.21$: numerical computation.
+    \item \texttt{matplotlib} $\geq 3.5$: report visualization (Agg backend, base64 inline PNG).
+    \item Optional: \texttt{openai}, \texttt{anthropic} for live API monitoring.
+\end{itemize}
+
+Installation: \texttt{pip install llm-ekg}
+
+The system is distributed as a single Python package (\texttt{llm\_ekg/}) with four modules: \texttt{engine.py} (core analysis), \texttt{report.py} (HTML generation), \texttt{\_\_main\_\_.py} (CLI and parsers), and \texttt{\_\_init\_\_.py} (public API).
+
+\section{Limitations and Future Work}
+
+\begin{itemize}[nosep]
+    \item The hallucination detection module identifies \emph{structural} patterns of hallucination (specificity + certainty mismatch) but cannot verify factual accuracy. A response that confidently states correct facts would not be flagged.
+    \item The system requires at least 10 responses for meaningful diagnostics and 32 for multi-scale analysis.
+    \item Current features target English and Spanish hedging/assertion lexicons. Extension to other languages requires adding word lists (no architectural changes).
+    \item Live monitoring adds negligible overhead (feature extraction is $O(n)$ per response where $n$ is response length).
+\end{itemize}
+
+Future work includes: real-time alerting with configurable webhook triggers, integration with observability platforms (Grafana, Datadog), longitudinal analysis across multiple sessions, and multi-model comparative dashboards.
+
+\section{Conclusion}
+
+LLM EKG demonstrates that meaningful quality monitoring of LLM outputs is achievable through pure mathematical analysis of structural properties, without any form of semantic understanding. The signal-based approach is model-agnostic, language-extensible, and requires no reference corpus or secondary evaluation model. By treating each session as a self-contained statistical universe, the system avoids the brittleness of hardcoded thresholds and adapts naturally to diverse use cases.
+
+The tool is freely available for personal use, research, and education under the Business Source License 1.1.
+
+\section*{Data Availability}
+
+The software, synthetic demo data, and full documentation are available at:\\
+\url{https://github.com/iafiscal1212/llm-ekg}
+
+\section*{Acknowledgments}
+
+The mathematical analysis techniques used in LLM EKG build on the author's prior work in behavioral dynamics modeling and multi-scale signal analysis.
+
+\vspace{1cm}
+\noindent\rule{\textwidth}{0.4pt}
+\small
+\noindent \textcopyright\ 2026 Carmen Esteban / IAFISCAL \& PARTNERS. All rights reserved.\\
+Contact: \texttt{carmen@iafiscal.es}
+
+\end{document}

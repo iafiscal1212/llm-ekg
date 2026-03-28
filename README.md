@@ -4,10 +4,16 @@
     <strong>Is your AI getting dumber? Now you can prove it.</strong>
   </p>
   <p align="center">
+    <a href="https://zenodo.org/records/19284461"><img src="https://zenodo.org/badge/doi/10.5281/zenodo.19284461.svg" alt="DOI"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL_1.1-blue" alt="License"></a>
+    <a href="https://pypi.org/project/llm-ekg"><img src="https://img.shields.io/badge/python-3.9%2B-green" alt="Python"></a>
+  </p>
+  <p align="center">
     <a href="#quick-start">Quick Start</a> &bull;
     <a href="#live-monitoring">Live Monitoring</a> &bull;
     <a href="#html-report">Report</a> &bull;
-    <a href="#how-it-works">How It Works</a>
+    <a href="#how-it-works">How It Works</a> &bull;
+    <a href="https://zenodo.org/records/19284461">Paper</a>
   </p>
 </p>
 
@@ -165,6 +171,21 @@ pip install llm-ekg[all]        # Both
 - **Converts to Apache 2.0**: March 28, 2030
 
 Contact: carmen@iafiscal.es
+
+## Cite
+
+If you use LLM EKG in your research, please cite:
+
+```bibtex
+@software{esteban2026llmekg,
+  author    = {Esteban, Carmen},
+  title     = {LLM EKG: A Mathematical Health Monitor for Large Language Models},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.19284461},
+  url       = {https://doi.org/10.5281/zenodo.19284461}
+}
+```
 
 ## Author
 
