@@ -12,3 +12,5 @@ venv/
 .env
 *.egg
 .pytest_cache/
+calibration_data/
+calibrate_security.py
