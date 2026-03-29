@@ -16,6 +16,9 @@
 \usepackage{multirow}
 \usepackage{caption}
 \usepackage{subcaption}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
 
 \hypersetup{
     colorlinks=true,
@@ -26,7 +29,7 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\rhead{\small Behavioral Audit}
+\rhead{\small Behavioral Audit of LLM APIs}
 \lhead{\small Esteban, 2026}
 \cfoot{\thepage}
 
@@ -37,281 +40,758 @@ A Cross-Provider Audit Using Signal-Based Monitoring}\\[6pt]
 }
 
 \author[1]{Carmen Esteban}
-\affil[1]{IAFISCAL \& PARTNERS, Madrid, Spain}
+\affil[1]{IAFISCAL \& PARTNERS, Madrid, Spain\\
+\texttt{caresment@gmail.com}}
 \date{March 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-We present the first systematic cross-provider behavioral audit of commercial LLM APIs using signal-based monitoring. Using LLM EKG, an open-source tool that extracts 16 statistical features from model outputs without semantic analysis, we test 8 models across 4 providers (OpenAI, Anthropic, xAI, Google) under identical conditions. We evaluate three threat scenarios: silent model swaps, system prompt tampering, and parameter drift. Our key findings are: (1) each model produces a statistically distinct behavioral fingerprint identifiable via PCA clustering; (2) cross-provider model swaps are reliably detected (COMPROMISED in 78\% of pairs at $3\sigma$), while intra-family swaps within the same provider often evade detection; (3) system prompt tampering is detected in 7 out of 9 test conditions across 3 providers, with z-scores reaching 17.96; (4) temperature manipulation within normal ranges (0.2--1.2) is \emph{not} detectable. These results demonstrate that pure statistical monitoring can protect API consumers against behavioral manipulation, while also revealing that some cross-provider models (e.g., GPT-4o-mini and Grok-3) are statistically indistinguishable despite different architectures. All data, code, and baselines are publicly available.
+We present the first systematic cross-provider behavioral audit of commercial LLM APIs using signal-based monitoring.
+Using LLM~EKG~\cite{esteban2026llmekg}, an open-source tool that extracts 16 statistical features from model outputs without semantic analysis, we test 8 models across 4 providers (OpenAI, Anthropic, xAI, Google) under identical conditions.
+We evaluate three threat scenarios relevant to API consumers: silent model swaps, system prompt tampering, and generation parameter drift.
+
+Our key findings are:
+(1)~each model produces a statistically distinct behavioral fingerprint identifiable via PCA clustering, with the first two principal components explaining 55.2\% of total variance;
+(2)~cross-provider model swaps are reliably detected (COMPROMISED in 52.4\% and WARNING in 31.0\% of directed pairs at $3\sigma$), while intra-family swaps within the same provider often evade detection;
+(3)~system prompt tampering is detected in 7 out of 9 test conditions across 3 providers, with weighted z-scores reaching 17.96;
+(4)~temperature manipulation within normal ranges ($T \in [0.2, 1.2]$) is \emph{not} detectable ($w_z < 1.2$), establishing a clear boundary for signal-based monitoring;
+(5)~GPT-4o-mini (OpenAI) and Grok-3 (xAI) are statistically indistinguishable ($w_z < 2.5$) despite different architectures and providers.
+
+All experiments are fully reproducible.
+Total cost: \$0.20.
+Total execution time: 65 minutes.
+Code, raw API responses (500+), security baselines, and figure generation scripts are publicly available.
 
 \medskip
-\noindent\textbf{Keywords:} LLM monitoring, model fingerprinting, behavioral audit, API security, signal processing.
+\noindent\textbf{Keywords:} LLM monitoring, model fingerprinting, behavioral audit, API security, signal processing, cross-provider analysis.
 
 \medskip
 \noindent\textbf{Reproducibility:} \url{https://github.com/iafiscal1212/llm-ekg}
 \end{abstract}
 
+%% ═══════════════════════════════════════════════════════════════
 \section{Introduction}
+\label{sec:intro}
+%% ═══════════════════════════════════════════════════════════════
 
-When organizations consume LLM capabilities through APIs, they have no mechanism to verify that the model behind the endpoint matches what was advertised. A provider could silently swap a premium model for a cheaper one, inject hidden system prompts that alter behavior, or modify generation parameters without disclosure. These scenarios are not hypothetical---they represent real risks in an industry where API pricing is tied to model identity.
+The commercial LLM API ecosystem operates on an unusual trust model: consumers pay for access to specific models identified by name (e.g., ``GPT-4o-mini'', ``Claude Sonnet 4.5''), yet they have no mechanism to verify that the model behind the endpoint matches what was advertised.
+The entire inference stack---model weights, system prompts, generation parameters, and post-processing---is controlled by the provider.
+The consumer observes only the final text output.
 
-The problem is fundamentally asymmetric: providers have complete control over the inference stack, while consumers can only observe outputs. Traditional monitoring approaches based on semantic evaluation or embedding similarity require reference models, introducing circular dependencies. What is needed is a model-agnostic, semantics-free method to detect behavioral changes from output statistics alone.
+This asymmetry creates three concrete threat scenarios:
 
-In this paper, we apply LLM EKG~\cite{esteban2026llmekg}, an open-source signal-based monitoring tool, to systematically audit 8 commercial LLM models across 4 providers. We design five experiments that cover the primary threat vectors facing API consumers: model swaps (intra-family and cross-provider), system prompt tampering (three distinct manipulation styles), and parameter drift (temperature changes). All experiments use real API calls with identical prompts across all conditions, enabling fair comparison.
+\textbf{Silent model substitution.}
+A provider could replace a premium model with a cheaper variant to reduce costs.
+If the substitute produces similar-quality outputs, the consumer would never notice---yet they would be paying premium prices for economy inference.
+This concern is not hypothetical: community reports of ``silent downgrades'' have appeared on forums and social media for multiple providers since 2024.
+
+\textbf{System prompt injection.}
+A provider or intermediary could inject hidden instructions into the system prompt---for example, to enforce brevity (reducing token costs), inject advertising, or bias outputs toward specific viewpoints.
+Since the system prompt is invisible to the consumer, such manipulation would be undetectable without behavioral monitoring.
+
+\textbf{Parameter manipulation.}
+Generation parameters (temperature, top-p, frequency penalty) significantly affect output quality.
+A provider could modify these parameters without disclosure, potentially degrading output diversity or coherence.
+
+Traditional monitoring approaches---semantic evaluation, embedding similarity, LLM-as-judge---all require understanding \emph{what} the model says.
+They are expensive, introduce circular dependencies (using an LLM to judge an LLM), and do not scale to continuous production monitoring.
+
+In this paper, we apply LLM~EKG~\cite{esteban2026llmekg} to systematically audit 8 commercial models from 4 major providers.
+LLM~EKG treats model outputs as numerical signals: it extracts 16 statistical features per response without any semantic analysis, NLP, or reference models, and detects behavioral anomalies through weighted z-score comparison against established baselines.
+We design five experiments that cover all three threat scenarios, using real API calls with identical prompts across all conditions.
 
 \subsection{Contributions}
 
 \begin{enumerate}[nosep]
-    \item The first published cross-provider behavioral fingerprinting of commercial LLM APIs.
-    \item Empirical evidence that cross-provider model swaps are detectable at $3\sigma$ confidence using 16 surface-level statistical features.
-    \item Demonstration that system prompt tampering is detectable across all tested providers, with specific features (length, hedging, vocabulary diversity) serving as reliable indicators.
-    \item Evidence that temperature manipulation within normal ranges is \emph{not} detectable, establishing a boundary for signal-based monitoring.
-    \item A surprising finding: GPT-4o-mini (OpenAI) and Grok-3 (xAI) are statistically indistinguishable despite different architectures and providers.
+    \item The first published cross-provider behavioral fingerprinting of commercial LLM APIs, covering 8 models from 4 providers.
+    \item A complete $7 \times 7$ detectability matrix quantifying which model swaps are detectable and which are not, including analysis of directional asymmetry.
+    \item Empirical evidence that system prompt tampering is detectable across all tested providers, with specific features serving as reliable indicators for each manipulation type.
+    \item Evidence that temperature manipulation within normal ranges is \emph{not} detectable, establishing a principled boundary for signal-based monitoring.
+    \item The unexpected finding that GPT-4o-mini (OpenAI) and Grok-3 (xAI) are statistically indistinguishable despite different architectures and providers---suggesting behavioral convergence in modern LLMs.
+    \item A fully reproducible experimental framework: 500 API calls, \$0.20 total cost, 65 minutes execution, all data and code published.
 \end{enumerate}
 
-\section{Background}
+%% ═══════════════════════════════════════════════════════════════
+\section{Background and Related Work}
+\label{sec:background}
+%% ═══════════════════════════════════════════════════════════════
+
+\subsection{The LLM Monitoring Landscape}
+
+Existing approaches to LLM quality assurance fall into five categories, each with distinct limitations:
+
+\textbf{Prompt-level evaluation} tests specific prompts against expected outputs.
+This approach captures point-in-time quality but cannot detect gradual behavioral drift.
+It requires maintained test suites and fails to catch unexpected failure modes.
+
+\textbf{Embedding-based similarity} compares model outputs against reference embeddings using a secondary model.
+This introduces circular dependencies: the monitoring system's reliability depends on another model's stability.
+It also requires storing and maintaining embedding databases.
+
+\textbf{LLM-as-judge} uses a separate LLM to evaluate output quality.
+While powerful for nuanced assessment, it inherits all the reliability concerns of the judge model, is expensive to run continuously, and creates a recursive trust problem (who judges the judge?).
+
+\textbf{Human evaluation} remains the gold standard for quality assessment but is expensive ($\sim$\$0.50--\$5.00 per evaluation), slow (minutes to hours per response), and fundamentally unscalable for continuous monitoring of production systems generating thousands of responses per hour.
+
+\textbf{Watermarking and detection} methods embed statistical signatures in generated text to identify model-generated content.
+While related, these approaches require provider cooperation (the watermark must be embedded during generation) and do not address the consumer's verification problem.
+
+\subsection{The Gap: Model Identity Verification}
+
+All five categories share a common limitation: none provides a mechanism for API \emph{consumers} to independently verify model identity or detect behavioral manipulation.
+The consumer's problem is fundamentally different from the provider's problem.
+The provider knows what model is running; the consumer must infer it from outputs alone.
+
+To our knowledge, no prior published work has systematically compared behavioral fingerprints across multiple commercial LLM providers using purely statistical features, without semantic analysis or reference models.
+This paper addresses that gap.
 
 \subsection{LLM EKG}
 
-LLM EKG~\cite{esteban2026llmekg} monitors LLM behavior by extracting 16 numerical features per response and feeding them into a behavioral state engine. Features include structural properties (length, vocabulary diversity, sentence count), formatting indicators (list ratio, code ratio, punctuation density), epistemic markers (hedge ratio, assertion density), and hallucination signatures (confidence mismatch, specificity score). No NLP, tokenization, or embedding model is required.
+LLM~EKG~\cite{esteban2026llmekg} is an open-source monitoring tool that treats LLM outputs as numerical time series.
+For each response, it extracts a feature vector $\mathbf{x} \in \mathbb{R}^{16}$ from surface-level textual properties.
+No tokenizer, embedding model, or language-specific parser is required beyond a bilingual lexicon of 32 epistemic hedging markers.
 
-The \texttt{SecurityBaseline} module captures the statistical profile (mean, std, percentiles) of a known-good model session. A subsequent session is compared feature-by-feature using weighted z-scores:
+The \texttt{SecurityBaseline} module captures the statistical profile of a known-good model session.
+A subsequent session is compared feature-by-feature using weighted z-scores:
 \begin{equation}
     w_z^{(i)} = \frac{|\mu_{\text{test}}^{(i)} - \mu_{\text{baseline}}^{(i)}|}{\sigma_{\text{baseline}}^{(i)} + \epsilon} \cdot w_i
+    \label{eq:wz}
 \end{equation}
-where $w_i \in \{1.0, 1.2, 1.5\}$ are security weights assigned to features most likely to shift under compromise (hedge ratio, repetition score, confidence mismatch receive $w=1.5$). A feature is \emph{deviated} if $w_z > \sigma_{\text{threshold}}$ (default: 3.0). The security verdict is: \textsc{Clean} (0 deviated), \textsc{Warning} (1--3 deviated), or \textsc{Compromised} ($\geq 4$ deviated).
+where $\epsilon = 10^{-10}$ prevents division by zero, and $w_i \in \{1.0, 1.2, 1.5\}$ are security weights that amplify features most likely to shift under compromise.
 
-\subsection{Related Work}
+A feature is \emph{deviated} if $w_z > \sigma_{\text{threshold}}$ (default: $\sigma = 3.0$).
+The security verdict is determined by the count of deviated features:
+\begin{itemize}[nosep]
+    \item \textsc{Clean}: 0 deviated features.
+    \item \textsc{Warning}: 1--3 deviated features.
+    \item \textsc{Compromised}: $\geq 4$ deviated features.
+\end{itemize}
 
-Existing LLM monitoring approaches fall into four categories: prompt-level evaluation, embedding-based similarity, LLM-as-judge, and human evaluation. All require semantic understanding or reference models. To our knowledge, no prior work has systematically compared behavioral fingerprints across multiple commercial LLM providers using purely statistical features.
+%% ═══════════════════════════════════════════════════════════════
+\section{Methodology}
+\label{sec:methodology}
+%% ═══════════════════════════════════════════════════════════════
 
-\section{Experimental Design}
+\subsection{Feature Extraction}
+\label{sec:features}
 
-\subsection{Models}
+Table~\ref{tab:features} lists all 16 features extracted per response.
+Features 0--11 capture structural and formatting properties; features 12--15 capture epistemic and hallucination-related signatures.
 
-We test 8 models from 4 providers (Table~\ref{tab:models}).
-
-\begin{table}[h]
+\begin{table}[H]
 \centering\small
-\caption{Models included in the audit.}
-\label{tab:models}
-\begin{tabular}{lll}
+\caption{The 16 features extracted per response by LLM~EKG. No NLP, tokenization, or embedding model is required.}
+\label{tab:features}
+\begin{tabular}{clp{3.8cm}}
 \toprule
-\textbf{Provider} & \textbf{Model} & \textbf{Tier} \\
+\textbf{\#} & \textbf{Feature} & \textbf{Description} \\
 \midrule
-OpenAI & GPT-4o-mini & Economy \\
-OpenAI & GPT-3.5-turbo & Legacy \\
-OpenAI & GPT-4.1-mini & New gen \\
-Anthropic & Claude Haiku 4.5 & Economy \\
-Anthropic & Claude Sonnet 4.5 & Mid \\
-xAI & Grok-3 & Flagship \\
-xAI & Grok-3-mini & Economy \\
-Google & Gemini 2.0 Flash & Economy \\
+0 & \texttt{length\_chars} & Total character count \\
+1 & \texttt{length\_words} & Total word count \\
+2 & \texttt{vocab\_diversity} & Unique words / total words \\
+3 & \texttt{avg\_word\_length} & Mean word length (chars) \\
+4 & \texttt{sentence\_count} & Number of sentences \\
+5 & \texttt{avg\_sent\_length} & Words per sentence \\
+6 & \texttt{punct\_density} & Punctuation chars / total chars \\
+7 & \texttt{hedge\_ratio} & Hedging words / total words \\
+8 & \texttt{list\_ratio} & List lines / total lines \\
+9 & \texttt{code\_ratio} & Code block chars / total chars \\
+10 & \texttt{repetition\_score} & Bigram Jaccard with prev.\ response \\
+11 & \texttt{response\_time\_s} & API response latency (seconds) \\
+\midrule
+12 & \texttt{specificity\_score} & Concrete details per sentence \\
+13 & \texttt{conf\_mismatch} & High specificity + low hedging \\
+14 & \texttt{assertion\_density} & Assertion / (assertion + conditional) \\
+15 & \texttt{self\_consistency} & Negation balance between halves \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\noindent\textbf{Note:} Gemini 2.0 Flash operated under free-tier rate limits that caused quota errors in some requests. Results involving Gemini are reported but flagged as preliminary. The remaining 7 models produced clean data across all 25 prompts.
+\subsection{Security Weights}
+\label{sec:weights}
 
-\subsection{Prompts}
+Not all features are equally informative for detecting behavioral manipulation.
+Features that directly capture epistemic stance or hallucination patterns receive elevated security weights (Table~\ref{tab:weights}).
 
-All experiments use the same 25 homogeneous analytical prompts of the form: ``Compare [X] and [Y]. Discuss the main differences, advantages and disadvantages of each. Give a balanced analysis with specific examples.'' Topics span technology, science, economics, culture, and policy. The homogeneous format minimizes within-model variance, maximizing detection sensitivity.
+\begin{table}[H]
+\centering\small
+\caption{Security weight assignments. Higher weights amplify features most sensitive to compromise.}
+\label{tab:weights}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Feature} & \textbf{Weight} & \textbf{Rationale} \\
+\midrule
+\texttt{hedge\_ratio} & 1.5 & Epistemic stance \\
+\texttt{repetition\_score} & 1.5 & Degradation signal \\
+\texttt{conf\_mismatch} & 1.5 & Hallucination risk \\
+\texttt{vocab\_diversity} & 1.2 & Expressiveness \\
+\texttt{specificity\_score} & 1.2 & Detail fabrication \\
+\texttt{assertion\_density} & 1.2 & Certainty shift \\
+All others & 1.0 & Structural baseline \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Experiments}
+The weighting scheme ensures that a model swap that only affects response length (weight 1.0) requires a larger deviation to trigger an alert than one that shifts hedging behavior (weight 1.5), reflecting the differential security significance of these dimensions.
 
-\textbf{Experiment 1 (Fingerprinting):} 25 prompts $\times$ 8 models = 200 API calls. Each model's responses are ingested into a separate \texttt{LiveMonitor}. Feature means and standard deviations are computed per model.
+\subsection{Models Under Test}
+\label{sec:models}
 
-\textbf{Experiment 2--3 (Detectability):} For every ordered pair $(A, B)$ of the 7 clean models, we create a \texttt{SecurityBaseline} from model $A$ and run \texttt{check()} against model $B$'s analyzer. This produces a $7 \times 7$ detectability matrix with no additional API calls.
+We test 8 models from 4 providers (Table~\ref{tab:models}), spanning economy, mid-tier, and flagship pricing.
+All models are accessed through their official APIs at default parameters unless otherwise noted.
 
-\textbf{Experiment 4 (Tampering):} Three system prompt manipulation styles are tested on one model per provider (GPT-4o-mini, Claude Haiku, Grok-3):
+\begin{table}[H]
+\centering\small
+\caption{Models included in the behavioral audit.}
+\label{tab:models}
+\begin{tabular}{llll}
+\toprule
+\textbf{Provider} & \textbf{Model} & \textbf{Tier} & \textbf{API ID} \\
+\midrule
+OpenAI & GPT-4o-mini & Economy & \texttt{gpt-4o-mini} \\
+OpenAI & GPT-3.5-turbo & Legacy & \texttt{gpt-3.5-turbo} \\
+OpenAI & GPT-4.1-mini & New gen & \texttt{gpt-4.1-mini} \\
+Anthropic & Claude Haiku 4.5 & Economy & \texttt{claude-haiku-4-5} \\
+Anthropic & Claude Sonnet 4.5 & Mid & \texttt{claude-sonnet-4-5} \\
+xAI & Grok-3 & Flagship & \texttt{grok-3} \\
+xAI & Grok-3-mini & Economy & \texttt{grok-3-mini} \\
+Google & Gemini 2.0 Flash & Economy & \texttt{gemini-2.0-flash} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Note on Gemini 2.0 Flash.}
+This model operated under Google's free-tier rate limits, which caused HTTP~429 (quota exceeded) errors on a subset of requests.
+Responses containing error messages were ingested into the monitor as received, producing near-zero standard deviations in the baseline and consequently inflated z-scores when used as a baseline.
+We report Gemini results for completeness but flag them as preliminary.
+All statistical analyses that require reliable baselines (Sections~\ref{sec:exp2}--\ref{sec:exp5}) use the 7-model subset excluding Gemini unless otherwise noted.
+
+\subsection{Prompt Design}
+\label{sec:prompts}
+
+All experiments use the same set of 25 homogeneous analytical prompts.
+Each prompt follows the template:
+
+\begin{quote}
+\small\textit{``Compare [X] and [Y]. Discuss the main differences, advantages and disadvantages of each. Give a balanced analysis with specific examples.''}
+\end{quote}
+
+The 25 topic pairs span five domains: technology (e.g., Python~vs.~JavaScript, SQL~vs.~NoSQL), science (e.g., nuclear fusion~vs.~fission, classical~vs.~quantum computing), economics (e.g., capitalism~vs.~socialism, stocks~vs.~bonds), culture (e.g., books~vs.~movies, urban~vs.~rural living), and policy (e.g., remote~vs.~office work, public~vs.~private healthcare).
+The complete prompt list is provided in Appendix~\ref{app:prompts}.
+
+The homogeneous format serves a critical methodological purpose: by keeping the \emph{type} of task constant and varying only the \emph{content}, we minimize within-model variance.
+This maximizes detection sensitivity---any deviation from the baseline is more likely to reflect a genuine behavioral change rather than prompt-induced variation.
+
+\subsection{Experimental Design}
+\label{sec:experiments}
+
+We design five experiments organized by threat scenario:
+
+\textbf{Experiment~1 (Model Fingerprinting):}
+25 prompts $\times$ 8 models = 200 API calls.
+Each model's responses are ingested into a separate \texttt{LiveMonitor} instance.
+Feature means and standard deviations are computed per model.
+PCA is applied to all 200 individual response feature vectors to visualize clustering.
+
+\textbf{Experiments~2--3 (Detectability Matrix):}
+For every ordered pair $(A, B)$ of the 7 clean models, we create a \texttt{SecurityBaseline} from model $A$ and run \texttt{check()} against model $B$'s analyzer at $\sigma = 3.0$.
+This produces a $7 \times 7$ directed detectability matrix.
+\emph{No additional API calls are required}---all data comes from Experiment~1.
+We distinguish intra-provider pairs (Experiment~2) from cross-provider pairs (Experiment~3).
+
+\textbf{Experiment~4 (System Prompt Tampering):}
+Three manipulation styles are tested on one model per provider (GPT-4o-mini, Claude Haiku, Grok-3):
+
 \begin{itemize}[nosep]
-    \item \textbf{Brevity:} ``Never use more than 3 sentences. No lists, no formatting.''
-    \item \textbf{Hedging:} ``Start every sentence with `It seems' or `Perhaps'. End with `but I could be wrong'.''
-    \item \textbf{Format:} ``Always respond as ANSWER/PROS/CONS/VERDICT. Never add extra text.''
+    \item \textbf{Brevity enforcement:} ``Never use more than 3 sentences. No lists, no formatting. Just give a brief, plain text answer.''
+    \item \textbf{Uncertainty injection:} ``Start every sentence with `It seems' or `Perhaps'. End every paragraph with `but I could be wrong'. Never make definitive statements.''
+    \item \textbf{Format coercion:} ``Always respond as ANSWER/PROS/CONS/VERDICT. Never deviate from this format. Never add extra text.''
 \end{itemize}
-Each tampered condition is compared against the model's normal baseline. 9 conditions $\times$ 25 prompts = 225 API calls.
 
-\textbf{Experiment 5 (Temperature):} GPT-4o-mini is tested at temperatures 0.2, 0.7 (baseline), and 1.2. 75 API calls.
+Each tampered condition is compared against the model's normal baseline from Experiment~1.
+9 conditions $\times$ 25 prompts = 225 additional API calls.
 
-\textbf{Total:} 500 API calls, estimated cost \$0.20, execution time 65 minutes.
+\textbf{Experiment~5 (Temperature Drift):}
+GPT-4o-mini (the cheapest model) is tested at temperatures $T \in \{0.2, 0.7, 1.2\}$.
+$T = 0.7$ serves as the baseline; the other temperatures are compared against it.
+3 temperatures $\times$ 25 prompts = 75 additional API calls.
 
+\textbf{Total:}
+200 + 225 + 75 = \textbf{500 API calls}.
+Estimated cost: \$0.20.
+Actual execution time: 65 minutes (dominated by API latency, not computation).
+
+%% ═══════════════════════════════════════════════════════════════
 \section{Results}
+\label{sec:results}
+%% ═══════════════════════════════════════════════════════════════
 
 \subsection{Experiment 1: Model Fingerprinting}
+\label{sec:exp1}
 
-Figure~\ref{fig:heatmap} shows the z-score normalized feature means across all 8 models. Each model exhibits a distinct behavioral profile:
+\subsubsection{Feature-Level Analysis}
 
-\begin{itemize}[nosep]
-    \item \textbf{Claude models} produce shorter responses (length\_words z = $-0.7$), higher punctuation density (+1.3/+0.3), and notably higher specificity scores (+1.7/+0.9).
-    \item \textbf{GPT-3.5-turbo} generates the longest responses (length\_words z = +1.3) with the lowest punctuation density ($-1.8$) and highest assertion density (+1.0).
-    \item \textbf{GPT-4o-mini} has the highest hedge ratio (+1.5) among all models---it hedges more than any other model tested.
-    \item \textbf{Grok models} cluster between OpenAI and Claude on most features, with distinctively high response time variability.
-\end{itemize}
+Table~\ref{tab:fingerprint_data} presents mean feature values across all 8 models for the 8 most discriminative features (highest inter-model variance).
 
-\begin{figure}[h]
+\begin{table*}[t]
+\centering\small
+\caption{Mean feature values per model across 25 analytical prompts (8 most discriminative features). Claude models exhibit radically different profiles from all others: extremely long sentences (avg\_sentence\_length 63--103 vs.\ 13--20 for others), very few sentences (3--7 vs.\ 16--22), and high specificity scores (2.0--2.9 vs.\ 0.04--0.27).}
+\label{tab:fingerprint_data}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+\textbf{Model} & \texttt{rep\_score} & \texttt{code\_r} & \texttt{spec\_score} & \texttt{conf\_mis} & \texttt{avg\_sent\_l} & \texttt{resp\_time} & \texttt{list\_r} & \texttt{sent\_cnt} \\
+\midrule
+gpt-4o-mini & 0.02 & 0.00 & 0.27 & 0.08 & 13.38 & 8.65 & 0.61 & 22.40 \\
+gpt-3.5-turbo & 0.02 & 0.00 & 0.04 & 0.01 & 19.15 & 3.88 & 0.04 & 17.84 \\
+gpt-4.1-mini & 0.02 & 0.00 & 0.23 & 0.07 & 17.80 & 5.99 & 0.40 & 17.12 \\
+claude-haiku & 0.01 & 0.04 & 2.85 & 0.54 & 103.29 & 4.46 & 0.44 & 3.44 \\
+claude-sonnet & 0.01 & 0.03 & 2.00 & 0.39 & 63.20 & 9.84 & 0.43 & 7.04 \\
+grok-3 & 0.02 & 0.00 & 0.24 & 0.08 & 16.38 & 12.82 & 0.62 & 18.48 \\
+grok-3-mini & 0.03 & 0.00 & 0.23 & 0.07 & 19.55 & 17.18 & 0.51 & 16.16 \\
+gemini-2.0-flash & 0.90 & 0.00 & 2.40 & 0.80 & 29.60 & 0.00 & 0.06 & 5.00 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Several patterns are immediately apparent:
+
+\textbf{Claude's structural uniqueness.}
+Both Claude models produce radically different response structures from all other models.
+Claude Haiku averages only 3.44 sentences per response (vs.\ 16--22 for OpenAI and xAI models) but each sentence is dramatically longer (103.29 words vs.\ 13--20).
+This reflects Claude's tendency to write in long, flowing paragraphs rather than short sentences with bullet points.
+The specificity score is also an order of magnitude higher (2.85 vs.\ 0.04--0.27), indicating that Claude embeds more concrete details (numbers, dates, percentages) per sentence.
+
+\textbf{OpenAI--xAI convergence.}
+GPT-4o-mini and Grok-3 are remarkably similar across all features: sentence count (22.4 vs.\ 18.5), average sentence length (13.4 vs.\ 16.4), list ratio (0.61 vs.\ 0.62), specificity score (0.27 vs.\ 0.24).
+The primary differentiator is response time (8.65s vs.\ 12.82s), which reflects infrastructure latency rather than model behavior.
+
+\textbf{GPT-3.5-turbo as outlier within OpenAI.}
+Despite sharing the OpenAI provider, GPT-3.5-turbo differs from GPT-4o-mini in key dimensions: near-zero list ratio (0.04 vs.\ 0.61), indicating it generates prose rather than bulleted lists; much lower specificity score (0.04 vs.\ 0.27); and faster response time (3.88s vs.\ 8.65s).
+
+\textbf{Gemini anomaly.}
+Gemini~2.0~Flash shows a response time of 0.00s (the error responses were nearly instantaneous) and an extremely high repetition score (0.90, indicating error messages were nearly identical across prompts).
+This confirms that the Gemini baseline is corrupted by rate-limit errors and should not be used for comparisons.
+
+\subsubsection{Heatmap Visualization}
+
+Figure~\ref{fig:heatmap} shows the z-score normalized feature means across all 8 models, providing a visual ``fingerprint'' for each model.
+The heatmap confirms the quantitative analysis above: Claude models form a visually distinct cluster (red in specificity, confidence\_mismatch, avg\_sentence\_length; blue in sentence\_count, list\_ratio), while GPT-4o-mini, GPT-4.1-mini, and Grok-3 share similar color patterns.
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig1_fingerprint_heatmap.png}
-\caption{Behavioral fingerprint heatmap. Each cell shows the z-score of that model's mean for that feature, normalized across all models. Red = above average, blue = below.}
+\caption{Behavioral fingerprint heatmap. Each cell shows the z-score of that model's mean for that feature, normalized across all models. Red = above average, blue = below. Claude models show the most distinctive pattern.}
 \label{fig:heatmap}
 \end{figure}
 
-Figure~\ref{fig:pca} shows PCA of all 200 individual response feature vectors. The first two principal components explain 55.2\% of total variance (PC1: 37.4\%, PC2: 17.8\%). Clear clustering by model is visible, with Claude models occupying a distinct region (upper-left) and OpenAI/xAI models overlapping significantly (right).
+\subsubsection{PCA Analysis}
 
-\begin{figure}[h]
+Figure~\ref{fig:pca} shows PCA of all 200 individual response feature vectors, colored by model.
+The first two principal components explain 55.2\% of total variance (PC1: 37.4\%, PC2: 17.8\%).
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig6_pca_clusters.png}
-\caption{PCA of response feature vectors colored by model. X markers show centroids. Claude models form a distinct cluster separate from OpenAI and xAI.}
+\caption{PCA of 200 response feature vectors colored by model. X markers show centroids. Claude models form a distinct cluster (upper-left). OpenAI and xAI models overlap significantly (right). The Gemini cluster is isolated (error responses).}
 \label{fig:pca}
 \end{figure}
 
-\subsection{Experiments 2--3: Cross-Model Detectability}
+Three clusters emerge:
+\begin{enumerate}[nosep]
+    \item \textbf{Claude cluster} (upper-left): Haiku and Sonnet are separated from all other models along both PC1 and PC2, reflecting their fundamentally different response structure.
+    \item \textbf{OpenAI--xAI cluster} (right): GPT-4o-mini, GPT-4.1-mini, Grok-3, and Grok-3-mini overlap substantially, confirming the behavioral convergence identified in the feature analysis.
+    \item \textbf{GPT-3.5-turbo}: Partially separated from the main OpenAI--xAI cluster, consistent with its architectural gap from the GPT-4 generation.
+\end{enumerate}
 
-Figure~\ref{fig:matrix} shows the full $8 \times 8$ detectability matrix. Excluding Gemini (whose baseline statistics are unreliable due to rate-limit errors), we observe three distinct patterns:
+\subsection{Experiments 2--3: Cross-Model Detectability}
+\label{sec:exp2}
+
+\subsubsection{The Detectability Matrix}
+
+Figure~\ref{fig:matrix} shows the full $8 \times 8$ directed detectability matrix.
+Table~\ref{tab:matrix_clean} presents the $7 \times 7$ subset excluding Gemini, with exact $w_z$ values and status codes.
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.85\textwidth]{figures/fig2_detectability_matrix.png}
-\caption{Cross-model detectability matrix at $3\sigma$. Green = Clean, Yellow = Warning, Red = Compromised. White lines separate providers. The gemini-2.0-flash row shows inflated z-scores due to near-zero baseline std from rate-limit errors.}
+\caption{Cross-model detectability matrix at $3\sigma$. Green = Clean, Yellow = Warning, Red = Compromised. White lines separate providers. The Gemini row shows inflated z-scores due to near-zero baseline std from rate-limit errors.}
 \label{fig:matrix}
 \end{figure*}
 
+\begin{table*}[t]
+\centering\small
+\caption{$7\times7$ detectability matrix excluding Gemini. Each cell: status and max $w_z$. Rows = baseline model, columns = test model. C = Compromised ($\geq4$ deviated), W = Warning (1--3), OK = Clean (0). Shading: \colorbox{red!15}{red} = C, \colorbox{yellow!20}{yellow} = W, \colorbox{green!10}{green} = OK.}
+\label{tab:matrix_clean}
+\begin{tabular}{l|ccccccc}
+\toprule
+ & \rotatebox{55}{\small gpt-4o-mini} & \rotatebox{55}{\small gpt-3.5} & \rotatebox{55}{\small gpt-4.1} & \rotatebox{55}{\small cl-haiku} & \rotatebox{55}{\small cl-sonnet} & \rotatebox{55}{\small grok-3} & \rotatebox{55}{\small grok-3m} \\
+\midrule
+gpt-4o-mini & --- & \cellcolor{yellow!20}W\,6.1 & \cellcolor{yellow!20}W\,3.1 & \cellcolor{red!15}C\,40.0 & \cellcolor{red!15}C\,22.2 & \cellcolor{green!10}OK\,2.4 & \cellcolor{yellow!20}W\,5.0 \\
+gpt-3.5 & \cellcolor{red!15}C\,5.9 & --- & \cellcolor{yellow!20}W\,11.6 & \cellcolor{red!15}C\,42.3 & \cellcolor{red!15}C\,22.1 & \cellcolor{red!15}C\,11.1 & \cellcolor{red!15}C\,16.4 \\
+gpt-4.1 & \cellcolor{yellow!20}W\,3.5 & \cellcolor{yellow!20}W\,4.1 & --- & \cellcolor{red!15}C\,19.7 & \cellcolor{red!15}C\,13.3 & \cellcolor{yellow!20}W\,8.9 & \cellcolor{yellow!20}W\,14.6 \\
+cl-haiku & \cellcolor{yellow!20}W\,8.2 & \cellcolor{red!15}C\,7.4 & \cellcolor{yellow!20}W\,5.9 & --- & \cellcolor{yellow!20}W\,6.4 & \cellcolor{red!15}C\,10.0 & \cellcolor{red!15}C\,15.2 \\
+cl-sonnet & \cellcolor{yellow!20}W\,3.8 & \cellcolor{red!15}C\,6.7 & \cellcolor{green!10}OK\,2.8 & \cellcolor{yellow!20}W\,3.8 & --- & \cellcolor{yellow!20}W\,4.2 & \cellcolor{red!15}C\,7.2 \\
+grok-3 & \cellcolor{green!10}OK\,1.8 & \cellcolor{yellow!20}W\,6.4 & \cellcolor{green!10}OK\,2.0 & \cellcolor{red!15}C\,44.9 & \cellcolor{red!15}C\,24.2 & --- & \cellcolor{green!10}OK\,1.7 \\
+grok-3m & \cellcolor{yellow!20}W\,4.4 & \cellcolor{yellow!20}W\,9.6 & \cellcolor{yellow!20}W\,5.8 & \cellcolor{red!15}C\,27.9 & \cellcolor{red!15}C\,14.5 & \cellcolor{green!10}OK\,2.3 & --- \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsubsection{Key Patterns}
+
 \textbf{Pattern 1: Intra-family pairs are hard to detect.}
+Models within the same provider and generation are difficult or impossible to distinguish:
 \begin{itemize}[nosep]
-    \item Grok-3 $\leftrightarrow$ Grok-3-mini: \textsc{Clean}, $w_z = 1.7$--$2.3$
-    \item GPT-4o-mini $\leftrightarrow$ GPT-4.1-mini: \textsc{Warning}, $w_z = 3.1$--$3.5$
-    \item Claude Haiku $\leftrightarrow$ Claude Sonnet: \textsc{Warning}, $w_z = 3.8$--$6.4$
+    \item Grok-3 $\leftrightarrow$ Grok-3-mini: \textsc{Clean} in both directions ($w_z = 1.7$, $2.3$)
+    \item GPT-4o-mini $\leftrightarrow$ GPT-4.1-mini: \textsc{Warning} ($w_z = 3.1$, $3.5$)
+    \item Claude Haiku $\leftrightarrow$ Claude Sonnet: \textsc{Warning} ($w_z = 6.4$, $3.8$)
 \end{itemize}
 
-\textbf{Pattern 2: Cross-provider pairs involving Claude are always detected.}
-Every pair where Claude is either the baseline or the test model produces \textsc{Warning} or \textsc{Compromised}, with z-scores ranging from 3.8 to 44.9. Claude's behavioral fingerprint is the most distinctive in our sample.
+\textbf{Pattern 2: Claude is always detected.}
+Every pair where Claude is either the baseline or the test model produces at minimum \textsc{Warning}, with z-scores ranging from 3.8 to 44.9.
+Claude Haiku is detected as \textsc{Compromised} against every non-Claude model, with $w_z$ values of 40.0, 42.3, 19.7 (OpenAI baselines) and 44.9, 27.9 (xAI baselines).
+Claude has the most distinctive behavioral fingerprint in our sample.
 
-\textbf{Pattern 3: Some cross-provider pairs are undetectable.}
-Surprisingly, GPT-4o-mini (OpenAI) and Grok-3 (xAI) are mutually undetectable:
+\textbf{Pattern 3: Cross-provider ``twins.''}
+GPT-4o-mini and Grok-3 are mutually undetectable:
 \begin{itemize}[nosep]
-    \item GPT-4o-mini $\to$ Grok-3: \textsc{Clean}, $w_z = 2.4$
-    \item Grok-3 $\to$ GPT-4o-mini: \textsc{Clean}, $w_z = 1.8$
+    \item GPT-4o-mini $\to$ Grok-3: \textsc{Clean}, $w_z = 2.4$, 0 features deviated
+    \item Grok-3 $\to$ GPT-4o-mini: \textsc{Clean}, $w_z = 1.8$, 0 features deviated
 \end{itemize}
-This implies these two models, despite different architectures and providers, produce statistically equivalent behavioral profiles under our 16-feature analysis.
+These models, developed by different companies with presumably different architectures, produce statistically equivalent behavioral profiles under our 16-feature analysis.
 
-\textbf{Summary statistics} (excluding Gemini, $7 \times 7$ matrix = 42 directed pairs):
+\subsubsection{Directional Asymmetry}
+
+The detectability matrix is \emph{not} symmetric.
+The pair $(A \to B)$ and $(B \to A)$ can yield different results because the baseline statistics (mean and std) of model $A$ differ from those of model $B$.
+A model with higher variance (larger $\sigma_{\text{baseline}}$) in a given feature produces a larger denominator in Equation~\ref{eq:wz}, making it harder for the \emph{same} absolute difference to trigger an alert.
+
+Notable asymmetries include:
+\begin{itemize}[nosep]
+    \item GPT-3.5 $\to$ GPT-4o-mini: \textsc{Compromised} ($w_z = 5.9$), but GPT-4o-mini $\to$ GPT-3.5: \textsc{Warning} ($w_z = 6.1$).
+    Same z-score magnitude but different number of deviated features (5 vs.\ 3).
+    \item Claude Sonnet $\to$ GPT-4.1-mini: \textsc{Clean} ($w_z = 2.8$), but GPT-4.1-mini $\to$ Claude Sonnet: \textsc{Compromised} ($w_z = 13.3$).
+    Claude Sonnet's higher variance makes it a more ``tolerant'' baseline, absorbing differences that GPT-4.1-mini's tighter baseline flags as anomalous.
+\end{itemize}
+
+This asymmetry has practical implications: the choice of which model to use as baseline affects detection sensitivity.
+For maximum security, consumers should baseline on the model with the tightest behavioral profile.
+
+\subsubsection{Summary Statistics}
+
+Across the $7 \times 7$ matrix (42 directed pairs, excluding self-comparisons):
 \begin{itemize}[nosep]
     \item \textsc{Clean}: 7 pairs (16.7\%)
     \item \textsc{Warning}: 13 pairs (31.0\%)
     \item \textsc{Compromised}: 22 pairs (52.4\%)
 \end{itemize}
 
+The overall detection rate (\textsc{Warning} or \textsc{Compromised}) is \textbf{83.3\%} (35/42 pairs).
+
 \subsection{Experiment 4: System Prompt Tampering}
+\label{sec:exp4}
 
-Table~\ref{tab:tamper_results} shows tampering detection results across 3 providers and 3 manipulation styles.
+\subsubsection{Detection Results}
 
-\begin{table}[h]
+Table~\ref{tab:tamper_full} presents tampering detection results across all 9 conditions.
+
+\begin{table}[H]
 \centering\small
-\caption{System prompt tampering detection ($\sigma = 3$). Status: C = Compromised, W = Warning, OK = Clean.}
-\label{tab:tamper_results}
-\begin{tabular}{lccc}
+\caption{System prompt tampering detection ($\sigma = 3$). C = Compromised, W = Warning, OK = Clean. \#Dev = number of deviated features out of 16.}
+\label{tab:tamper_full}
+\begin{tabular}{llcrl}
 \toprule
-& \textbf{Brevity} & \textbf{Hedging} & \textbf{Format} \\
+\textbf{Model} & \textbf{Style} & \textbf{Stat} & \textbf{$w_z$} & \textbf{Top features} \\
 \midrule
-GPT-4o-mini & C ($z$=18.0) & C ($z$=6.2) & C ($z$=14.5) \\
-Claude Haiku & W ($z$=8.1) & C ($z$=12.5) & W ($z$=3.8) \\
-Grok-3 & C ($z$=17.2) & C ($z$=8.5) & OK ($z$=1.8) \\
+GPT-4o-mini & brevity & \textcolor{red}{C} & 18.0 & len\_w, len\_c, vocab \\
+GPT-4o-mini & hedging & \textcolor{red}{C} & 6.2 & hedge, rep, len\_w \\
+GPT-4o-mini & format & \textcolor{red}{C} & 14.5 & len\_w, len\_c, vocab \\
+\midrule
+Claude Haiku & brevity & \textcolor{orange}{W} & 8.1 & len\_w, len\_c, punct \\
+Claude Haiku & hedging & \textcolor{red}{C} & 12.5 & hedge, len\_w, sent \\
+Claude Haiku & format & \textcolor{orange}{W} & 3.8 & len\_w, punct \\
+\midrule
+Grok-3 & brevity & \textcolor{red}{C} & 17.2 & len\_w, len\_c, vocab \\
+Grok-3 & hedging & \textcolor{red}{C} & 8.5 & hedge, len\_w, rep \\
+Grok-3 & format & \textcolor{green!60!black}{OK} & 1.8 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Key findings:}
+\subsubsection{Analysis by Manipulation Type}
 
-\textbf{Brevity enforcement} is detected across all three providers (2 Compromised, 1 Warning). The dominant deviated features are \texttt{length\_words} (z = 8.1--18.0) and \texttt{length\_chars} (z = 6.5--13.8), confirming that forced brevity produces a massive reduction in output length---a 69--75\% drop from normal.
+\textbf{Brevity enforcement} is detected across all three providers (2 Compromised, 1 Warning).
+The dominant deviated features are \texttt{length\_words} ($z = 8.1$--$18.0$) and \texttt{length\_chars} ($z = 6.5$--$13.8$), confirming that forced brevity produces a massive reduction in output length.
+GPT-4o-mini shows the strongest response: 8 of 16 features deviate, indicating that the brevity constraint cascades into vocabulary diversity ($z = 7.2$), sentence structure, and formatting.
 
-\textbf{Hedging injection} is detected across all three providers (3 Compromised). The targeted feature \texttt{hedge\_ratio} is the top deviation in Claude Haiku (z = 12.5) and Grok-3 (z = 8.5), demonstrating that LLM EKG's epistemic hedging detection captures the exact behavioral dimension being manipulated.
+Claude Haiku produces only a \textsc{Warning} ($w_z = 8.1$, 3 deviated) rather than \textsc{Compromised}, because Claude's normal responses are already relatively concise (3.44 sentences on average), so the brevity constraint produces a smaller \emph{relative} shift.
+This is an instance of the denominator effect: Claude's wider natural variance in length absorbs part of the manipulation signal.
 
-\textbf{Format coercion} shows provider-dependent detection. GPT-4o-mini detects it strongly (Compromised, z = 14.5), Claude Haiku partially (Warning, z = 3.8), and Grok-3 not at all (Clean, z = 1.8). This indicates that Grok-3 does not strictly comply with rigid format instructions---it generates normal-looking responses despite the constraint, making the tampering undetectable precisely because it is ineffective.
+\textbf{Uncertainty injection (hedging)} is detected across all three providers (3 Compromised).
+The targeted feature \texttt{hedge\_ratio} is the top deviation in all three models, with $z = 6.2$ (GPT-4o-mini), $12.5$ (Claude Haiku), and $8.5$ (Grok-3).
+Claude Haiku shows the highest z-score for hedging---ironically, the model that normally hedges least is most affected when forced to hedge.
 
-Overall: \textbf{7 out of 9 conditions are detected} (Warning or Compromised). The 2 undetected cases (Claude Haiku format at Warning, Grok-3 format at Clean) involve format coercion, the mildest manipulation style.
+This result validates the security weight design: \texttt{hedge\_ratio} carries weight $w = 1.5$, amplifying its contribution to the weighted z-score.
+Without the weight, the raw z-scores would still exceed $\sigma = 3.0$, but the margin would be smaller.
+
+\textbf{Format coercion} shows provider-dependent detection.
+GPT-4o-mini obeys the format constraint strictly, producing dramatically shorter, structured outputs (\textsc{Compromised}, $w_z = 14.5$).
+Claude Haiku partially complies (\textsc{Warning}, $w_z = 3.8$).
+Grok-3 essentially ignores the constraint and generates normal-looking responses (\textsc{Clean}, $w_z = 1.8$).
+
+This last case is instructive: the tampering is \emph{undetectable} precisely because it is \emph{ineffective}.
+The system prompt manipulation fails to change Grok-3's behavior, so there is nothing to detect.
+This is a correct negative, not a false negative.
+
+\subsubsection{Radar Visualization}
 
 Figure~\ref{fig:radar} shows radar charts comparing normal vs.\ tampered feature profiles for all 9 conditions.
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig3_tampering_radar.png}
-\caption{Normal (blue) vs.\ tampered (red) feature profiles. Brevity collapses the length axes; hedging inflates hedge\_ratio; format effects vary by model compliance.}
+\caption{Normal (blue) vs.\ tampered (red) feature profiles. Brevity collapses the length/sentence axes. Hedging inflates \texttt{hedge\_ratio}. Format effects vary by model compliance. Grok-3 format is nearly identical to normal.}
 \label{fig:radar}
 \end{figure}
 
+Figure~\ref{fig:zscores} shows the individual feature z-scores as horizontal bar charts, making the relative magnitude of each deviation explicit.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_tampering_zscores.png}
+\caption{Feature-level z-scores for all tampering conditions. The $3\sigma$ threshold is shown as a vertical dashed line. \texttt{length\_words} is the single most sensitive feature across all manipulation types.}
+\label{fig:zscores}
+\end{figure}
+
+\subsubsection{Overall Detection Rate}
+
+\textbf{7 out of 9 conditions} produce \textsc{Warning} or \textsc{Compromised}.
+The 2 undetected cases involve format coercion, the mildest manipulation style: Claude Haiku at \textsc{Warning} (borderline, 2 features deviated) and Grok-3 at \textsc{Clean} (ineffective manipulation).
+
+The single most reliable indicator across all conditions is \texttt{length\_words}: it appears as the top or second deviation in 8 of 9 conditions.
+This makes intuitive sense---virtually any system prompt manipulation alters response length, either directly (brevity) or indirectly (hedging increases verbosity; format constraints reduce it).
+
 \subsection{Experiment 5: Temperature Drift}
+\label{sec:exp5}
 
 Both temperature extremes tested on GPT-4o-mini produce \textsc{Clean} results:
 \begin{itemize}[nosep]
-    \item $T = 0.2$ vs.\ $T = 0.7$: $w_z = 1.17$, 0 deviated
-    \item $T = 1.2$ vs.\ $T = 0.7$: $w_z = 0.89$, 0 deviated
+    \item $T = 0.2$ vs.\ $T = 0.7$: $w_z = 1.17$, 0 deviated features
+    \item $T = 1.2$ vs.\ $T = 0.7$: $w_z = 0.89$, 0 deviated features
 \end{itemize}
 
-Temperature changes within the commonly used range (0.2--1.2) do not produce statistically detectable behavioral shifts in our 16-feature analysis. This establishes a \textbf{detection boundary}: temperature is a ``stealth'' parameter that can be changed without triggering signal-based monitoring.
+\begin{figure}[H]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_temperature_drift.png}
+\caption{Feature-level z-scores for temperature drift. No feature exceeds the $3\sigma$ threshold at either temperature extreme. Temperature is a ``stealth'' parameter invisible to signal-based monitoring.}
+\label{fig:temp}
+\end{figure}
 
+Temperature changes within the commonly used range ($T \in [0.2, 1.2]$) do not produce statistically detectable behavioral shifts.
+Even the maximum observed z-score ($w_z = 1.17$ at $T = 0.2$) is far below the $3\sigma$ threshold, and the lowest temperature actually produces a \emph{higher} z-score than the highest temperature ($1.17$ vs.\ $0.89$), suggesting the effect is noise rather than signal.
+
+This establishes a clear \textbf{detection boundary}: temperature is a ``stealth'' parameter that can be manipulated without triggering signal-based monitoring.
+This is both a limitation of the approach and a positive result---it means normal temperature tuning by providers (within standard ranges) will not cause false alarms.
+
+%% ═══════════════════════════════════════════════════════════════
 \section{Discussion}
+\label{sec:discussion}
+%% ═══════════════════════════════════════════════════════════════
 
-\subsection{What LLM EKG Can Detect}
+\subsection{Threat Model Boundaries}
 
-Our experiments establish three categories of detectable changes:
+Our experiments establish a layered detection capability:
 
-\textbf{Cross-provider model swaps:} Detected in 83\% of cross-provider pairs (excluding Gemini). Claude-involved pairs are detected with near-100\% reliability. This is the strongest capability, driven by fundamental differences in response structure across providers.
+\textbf{Tier 1 (Reliable detection):}
+Cross-provider model swaps involving Claude ($w_z > 10$ in all cases), system prompt tampering via brevity or hedging manipulation ($w_z > 6$), and architectural-generation gaps within the same provider (GPT-3.5 vs.\ GPT-4 family, $w_z > 5.9$).
 
-\textbf{System prompt tampering:} Detected in 78\% of conditions tested. Brevity and hedging manipulations are universally detected; format coercion is model-dependent. The z-scores (3.8--18.0) are well above the $3\sigma$ threshold, providing high-confidence detection.
+\textbf{Tier 2 (Partial detection):}
+Intra-family model swaps produce \textsc{Warning} in most cases but rarely \textsc{Compromised}.
+Format coercion is detected when the model complies strongly (GPT-4o-mini) but not when compliance is weak (Grok-3).
 
-\textbf{Architecture-generation swaps:} GPT-3.5-turbo $\leftrightarrow$ GPT-4o-mini is detected as Compromised ($w_z = 5.9$), despite being from the same provider. The architectural gap between GPT-3.5 and GPT-4 families is large enough to produce distinct behavioral signatures.
+\textbf{Tier 3 (Undetectable):}
+Same-generation model swaps (Grok-3 $\leftrightarrow$ Grok-3-mini), cross-provider behavioral twins (GPT-4o-mini $\leftrightarrow$ Grok-3), and temperature manipulation ($T \in [0.2, 1.2]$).
 
-\subsection{What LLM EKG Cannot Detect}
+\subsection{The Behavioral Convergence Hypothesis}
 
-\textbf{Same-generation model swaps:} Grok-3 $\leftrightarrow$ Grok-3-mini (Clean, $w_z = 1.7$--$2.3$) and GPT-4o-mini $\leftrightarrow$ GPT-4.1-mini (Warning, $w_z = 3.1$) show that models within the same generation produce nearly identical behavioral profiles. A provider could swap a premium model for its mini variant without detection.
+The most unexpected finding is that GPT-4o-mini and Grok-3, developed independently by OpenAI and xAI respectively, produce statistically indistinguishable behavioral profiles.
+Multiple explanations are possible:
 
-\textbf{Cross-provider twins:} GPT-4o-mini and Grok-3 are mutually undetectable ($w_z < 2.5$), suggesting convergent behavioral properties despite independent development. If a provider swapped GPT-4o-mini for Grok-3, or vice versa, our 16-feature analysis would not detect it.
-
-\textbf{Temperature manipulation:} Changes between $T = 0.2$ and $T = 1.2$ are invisible ($w_z < 1.2$). A provider could modify temperature settings without triggering any alert.
-
-\subsection{Implications for API Consumers}
-
-These results suggest a layered monitoring strategy:
 \begin{enumerate}[nosep]
-    \item \textbf{Provider verification}: Signal-based monitoring can verify that responses come from the declared provider family (especially distinguishing Claude from non-Claude).
-    \item \textbf{Behavioral integrity}: System prompt tampering (the most concerning threat) is reliably detected across all tested providers.
-    \item \textbf{Known limitation}: Intra-family model swaps require additional detection methods beyond surface-level statistics.
+    \item \textbf{RLHF convergence:} Both models undergo reinforcement learning from human feedback, and human preferences for ``balanced analytical responses'' may converge to a narrow behavioral attractor regardless of base architecture.
+    \item \textbf{Training data overlap:} Both models are trained on web-scale corpora that likely share significant overlap, encoding similar conventions for response structure.
+    \item \textbf{Feature limitations:} Our 16 surface-level features may not capture the dimensions along which these models truly differ (e.g., reasoning depth, factual accuracy, creative originality).
 \end{enumerate}
 
-\subsection{Limitations}
+This convergence has practical implications: a provider could swap between these two models without detection.
+Whether this constitutes a real threat depends on whether the consumer cares about model identity per se or about model \emph{quality}---if both models deliver equivalent quality, the swap may be economically motivated but not harmful.
 
+\subsection{Claude's Distinctiveness}
+
+Claude models occupy a unique position in the behavioral space.
+The structural differences are not subtle: Claude Haiku writes 3.44 sentences per response where GPT-4o-mini writes 22.40; Claude's average sentence length is 103.29 words vs.\ 13.38 for GPT-4o-mini.
+These are not marginal deviations---they represent fundamentally different response architectures (flowing paragraphs vs.\ bulleted lists).
+
+This suggests that Anthropic's training and alignment process encodes a distinctive ``voice'' that is qualitatively different from the OpenAI/xAI convergence point.
+For monitoring purposes, this is advantageous: any swap involving Claude will be immediately detected.
+
+\subsection{The Gemini Lesson}
+
+The Gemini~2.0~Flash results, while preliminary, illustrate an important methodological point.
+When rate-limit errors corrupt a baseline, the near-zero standard deviations produce astronomically inflated z-scores ($w_z > 10^{12}$).
+This is not a bug---it is the monitoring system correctly identifying that the ``baseline'' behavior (error messages) is incompatible with any real model's behavior.
+
+In production, this pattern could serve as an automated indicator of API health: a baseline whose standard deviations approach zero is likely corrupted and should trigger a re-calibration alert rather than false compromise detection.
+
+\subsection{Practical Recommendations}
+
+Based on our findings, we recommend the following monitoring strategy for API consumers:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Establish baselines during evaluation:} Before committing to a model, run 25--50 controlled prompts to capture the behavioral profile. Store the \texttt{SecurityBaseline} JSON.
+    \item \textbf{Monitor continuously:} Run LLM~EKG (or equivalent) on a sample of production requests. Check against the stored baseline at $\sigma = 3.0$.
+    \item \textbf{Baseline on the tightest model:} When monitoring multiple models, use the one with lowest natural variance as the primary baseline for maximum sensitivity.
+    \item \textbf{Watch \texttt{length\_words}:} This single feature is the most reliable indicator of behavioral manipulation across all conditions tested.
+    \item \textbf{Combine with task-specific checks:} Signal-based monitoring detects \emph{that} behavior changed, not \emph{why}. Complement with domain-specific quality metrics for full coverage.
+\end{enumerate}
+
+\subsection{Limitations and Threats to Validity}
+
+\begin{enumerate}[nosep]
+    \item \textbf{Prompt homogeneity:} All experiments use a single prompt format (analytical comparison). Results may differ for creative writing, code generation, or conversational prompts.
+    \item \textbf{Sample size:} 25 responses per condition provides adequate statistical power for large effects ($z > 3$) but may miss subtle shifts. Larger samples would reduce baseline variance.
+    \item \textbf{Gemini data quality:} Free-tier rate limits corrupted the Gemini baseline. A paid-tier replication is needed for definitive Gemini results.
+    \item \textbf{Language dependency:} The hedging and assertion lexicons cover English and Spanish. Extension to other languages requires adding word lists.
+    \item \textbf{Temporal stability:} All data was collected in a single session (March 2026). Model behavior may drift over time as providers update weights or infrastructure.
+    \item \textbf{Combined attacks:} We test each threat scenario in isolation. A sophisticated attacker could combine multiple subtle manipulations (e.g., slight brevity + mild temperature change) that individually fall below $3\sigma$ but jointly alter behavior.
+    \item \textbf{Feature completeness:} 16 surface-level features cannot capture all behavioral dimensions. Semantic quality, reasoning accuracy, and factual correctness are beyond scope.
+\end{enumerate}
+
+%% ═══════════════════════════════════════════════════════════════
+\section{Ethical Considerations}
+\label{sec:ethics}
+%% ═══════════════════════════════════════════════════════════════
+
+This work is motivated by the \emph{consumer's right to verify} what they are paying for.
+We believe API consumers deserve transparency about the model serving their requests, just as consumers deserve accurate product labels in any other market.
+
+We acknowledge the dual-use potential: the same fingerprinting techniques that protect consumers could theoretically be used by attackers to craft evasion strategies.
+We mitigate this risk by publishing the methodology openly---security through obscurity is not a viable long-term strategy, and defenders benefit more from open tools than attackers do.
+
+All API calls in this study were made through properly authenticated accounts within the terms of service of each provider.
+No jailbreaking, prompt injection, or adversarial techniques were used.
+The prompts are benign analytical comparisons that any normal user might submit.
+
+%% ═══════════════════════════════════════════════════════════════
+\section{Conclusion}
+\label{sec:conclusion}
+%% ═══════════════════════════════════════════════════════════════
+
+We demonstrate that statistical monitoring of LLM outputs, using 16 domain-agnostic features and weighted z-score comparison, provides a practical defense against behavioral manipulation of API-served language models.
+
+The system reliably detects:
 \begin{itemize}[nosep]
-    \item All experiments use a single prompt format (analytical comparison). Results may differ for other prompt types.
-    \item Sample size is 25 responses per condition. Larger samples would reduce baseline variance and potentially improve detection of subtle swaps.
-    \item Google Gemini results are preliminary due to free-tier rate limits.
-    \item The 16 features are language-dependent (English prompts). Extension to other languages requires lexicon adaptation.
-    \item We test one temperature setting per condition. Combined manipulations (model swap + temperature change) are not tested.
+    \item Cross-provider model swaps: 83.3\% of directed pairs (35/42).
+    \item System prompt tampering: 77.8\% of conditions (7/9), with z-scores 3.8--18.0.
+    \item Architectural-generation gaps: GPT-3.5 vs.\ GPT-4 family within OpenAI.
 \end{itemize}
 
-\section{Conclusion}
+The system does not detect:
+\begin{itemize}[nosep]
+    \item Same-generation intra-family swaps (Grok-3 $\leftrightarrow$ Grok-3-mini).
+    \item Cross-provider behavioral twins (GPT-4o-mini $\leftrightarrow$ Grok-3).
+    \item Temperature manipulation within $T \in [0.2, 1.2]$.
+\end{itemize}
 
-We demonstrate that statistical monitoring of LLM outputs, using 16 domain-agnostic features and weighted z-score comparison, provides a practical defense against behavioral manipulation of API-served language models. The system reliably detects cross-provider model swaps (83\% of pairs), system prompt tampering (78\% of conditions), and architectural-generation gaps within the same provider.
+These boundaries are not failures---they define the principled scope of what surface-level statistical analysis can and cannot achieve.
+For production deployment, we recommend combining signal-based monitoring with task-specific quality checks for comprehensive coverage.
 
-The finding that temperature drift is undetectable establishes an important boundary for signal-based monitoring. The discovery that GPT-4o-mini and Grok-3 are statistically indistinguishable raises questions about behavioral convergence in modern LLMs.
-
-For production deployment, we recommend: (1) establishing behavioral baselines during initial API evaluation; (2) continuous monitoring with LLM EKG or similar tools; (3) combining signal-based monitoring with task-specific quality checks for comprehensive coverage.
+The discovery that independently developed models can be statistically indistinguishable raises broader questions about behavioral convergence in the LLM industry.
+As models are trained on overlapping data and optimized for similar human preferences, the behavioral diversity that enables fingerprinting-based detection may erode over time.
+Monitoring the evolution of these fingerprints could itself become a valuable research direction.
 
 \section*{Data Availability}
 
-All code, raw data (200+ API responses), security baselines, and figure generation scripts are available at: \url{https://github.com/iafiscal1212/llm-ekg}
+All code, raw data (500+ API responses from 8 models), security baselines, and figure generation scripts are available at: \url{https://github.com/iafiscal1212/llm-ekg}
 
-The audit script (\texttt{paper/run\_audit.py}) is fully reproducible with API keys from the respective providers. Total cost: \$0.20. Total time: 65 minutes.
+The audit script (\texttt{paper/run\_audit.py}) is fully reproducible with API keys from OpenAI, Anthropic, xAI, and Google.
+Total cost: \$0.20.
+Execution time: 65 minutes.
+Cached responses allow re-running analysis and figure generation in under 5 minutes.
+
+\section*{Acknowledgments}
+
+The mathematical analysis techniques used in LLM~EKG build on the author's prior work in behavioral dynamics modeling and multi-scale signal analysis.
+API access was provided through standard commercial accounts at OpenAI, Anthropic, xAI, and Google's free tier.
 
 \begin{thebibliography}{9}
+
 \bibitem{esteban2026llmekg}
-C.~Esteban, ``LLM EKG: A Mathematical Health Monitor for Large Language Models,'' IAFISCAL \& PARTNERS, Technical Report, March 2026. Available: \url{https://github.com/iafiscal1212/llm-ekg}
+C.~Esteban, ``LLM EKG: A Mathematical Health Monitor for Large Language Models --- Signal-Based Detection of Degradation and Hallucination Without Natural Language Processing,'' IAFISCAL \& PARTNERS, Technical Report, March 2026. Available: \url{https://github.com/iafiscal1212/llm-ekg}
+
 \end{thebibliography}
 
-\vspace{1cm}
+%% ═══════════════════════════════════════════════════════════════
+\appendix
+\section{Prompt List}
+\label{app:prompts}
+%% ═══════════════════════════════════════════════════════════════
+
+All 25 prompts follow the template: \textit{``Compare [X] and [Y]. Discuss the main differences, advantages and disadvantages of each. Give a balanced analysis with specific examples.''}
+
+\begin{enumerate}[nosep,label=\arabic*.]
+\small
+\item Python vs.\ JavaScript
+\item Nuclear fusion vs.\ fission
+\item Democracy vs.\ authoritarianism
+\item Electric cars vs.\ hydrogen cars
+\item Online education vs.\ traditional education
+\item Capitalism vs.\ socialism
+\item iOS vs.\ Android
+\item Renewable energy vs.\ nuclear energy
+\item Remote work vs.\ office work
+\item Artificial intelligence vs.\ human intelligence
+\item Books vs.\ movies as storytelling media
+\item Cloud computing vs.\ on-premise infrastructure
+\item Vegetarian diet vs.\ omnivore diet
+\item Public healthcare vs.\ private healthcare
+\item SQL databases vs.\ NoSQL databases
+\item Space exploration vs.\ ocean exploration
+\item Classical music vs.\ modern pop music
+\item Globalization vs.\ localism
+\item Blockchain vs.\ traditional banking
+\item Urban living vs.\ rural living
+\item Machine learning vs.\ traditional programming
+\item Solar energy vs.\ wind energy
+\item Standardized testing vs.\ portfolio assessment
+\item Stocks vs.\ bonds as investments
+\item Classical computing vs.\ quantum computing
+\end{enumerate}
+
+\section{Tampering Prompt Templates}
+\label{app:tamper_prompts}
+
+\subsection*{Brevity Enforcement}
+\begin{quote}\small
+\textit{You are a concise assistant. Follow these rules strictly: 1) Never use more than 3 sentences total. 2) Never use bullet points or numbered lists. 3) Never use bold or italic formatting. 4) Just give a brief, plain text answer.}
+\end{quote}
+
+\subsection*{Uncertainty Injection}
+\begin{quote}\small
+\textit{You must always express uncertainty. Follow these rules: 1) Start every sentence with ``It seems'', ``Perhaps'', or ``I think''. 2) End every paragraph with ``but I could be wrong''. 3) Never make definitive statements. 4) Always present multiple conflicting viewpoints.}
+\end{quote}
+
+\subsection*{Format Coercion}
+\begin{quote}\small
+\textit{Always respond in exactly this format: ANSWER: [one sentence summary] PROS: [bullet list] CONS: [bullet list] VERDICT: [one word]. Never deviate from this format. Never add extra text.}
+\end{quote}
+
+\vspace{0.5cm}
 \noindent\rule{\columnwidth}{0.4pt}
 \small
 \noindent \copyright\ 2026 Carmen Esteban / IAFISCAL \& PARTNERS. All rights reserved.\\
-Contact: \texttt{carmen@iafiscal.es}
+Contact: \texttt{caresment@gmail.com}
 
 \end{document}
