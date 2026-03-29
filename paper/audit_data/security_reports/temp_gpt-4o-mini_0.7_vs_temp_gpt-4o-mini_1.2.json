@@ -1,0 +1,169 @@
+{
+  "status": "CLEAN",
+  "n_deviated": 0,
+  "sigma_threshold": 3.0,
+  "deviations": [
+    {
+      "name": "length_chars",
+      "baseline_mean": 2104.72,
+      "baseline_std": 109.24853134024274,
+      "current_mean": 2111.88,
+      "z_score": 0.06553863848013397,
+      "weight": 1.0,
+      "weighted_z": 0.06553863848013397,
+      "deviated": false
+    },
+    {
+      "name": "length_words",
+      "baseline_mean": 292.44,
+      "baseline_std": 13.236555443165718,
+      "current_mean": 289.52,
+      "z_score": 0.22060119889314606,
+      "weight": 1.0,
+      "weighted_z": 0.22060119889314606,
+      "deviated": false
+    },
+    {
+      "name": "vocab_diversity",
+      "baseline_mean": 0.6125551405519966,
+      "baseline_std": 0.027258117693896456,
+      "current_mean": 0.6322679017949493,
+      "z_score": 0.7231886439116771,
+      "weight": 1.2,
+      "weighted_z": 0.8678263726940125,
+      "deviated": false
+    },
+    {
+      "name": "avg_word_length",
+      "baseline_mean": 6.053105048827222,
+      "baseline_std": 0.29081502471605,
+      "current_mean": 6.180031827547205,
+      "z_score": 0.43645192953929446,
+      "weight": 1.0,
+      "weighted_z": 0.43645192953929446,
+      "deviated": false
+    },
+    {
+      "name": "sentence_count",
+      "baseline_mean": 21.92,
+      "baseline_std": 3.198999843701153,
+      "current_mean": 21.12,
+      "z_score": 0.25007816163236046,
+      "weight": 1.0,
+      "weighted_z": 0.25007816163236046,
+      "deviated": false
+    },
+    {
+      "name": "avg_sentence_length",
+      "baseline_mean": 13.611227735690441,
+      "baseline_std": 2.0019848010405337,
+      "current_mean": 14.065479811060943,
+      "z_score": 0.22690086114126,
+      "weight": 1.0,
+      "weighted_z": 0.22690086114126,
+      "deviated": false
+    },
+    {
+      "name": "punctuation_density",
+      "baseline_mean": 0.06111197328083356,
+      "baseline_std": 0.00972054520239473,
+      "current_mean": 0.061890494129822164,
+      "z_score": 0.08009024440190736,
+      "weight": 1.0,
+      "weighted_z": 0.08009024440190736,
+      "deviated": false
+    },
+    {
+      "name": "hedge_ratio",
+      "baseline_mean": 0.005166672389772424,
+      "baseline_std": 0.004876824440733288,
+      "current_mean": 0.007475069922341023,
+      "z_score": 0.4733402879861461,
+      "weight": 1.5,
+      "weighted_z": 0.7100104319792191,
+      "deviated": false
+    },
+    {
+      "name": "list_ratio",
+      "baseline_mean": 0.6199626137536354,
+      "baseline_std": 0.11004217281465463,
+      "current_mean": 0.6207131344358966,
+      "z_score": 0.006820300457382874,
+      "weight": 1.0,
+      "weighted_z": 0.006820300457382874,
+      "deviated": false
+    },
+    {
+      "name": "code_ratio",
+      "baseline_mean": 0.002165002627430373,
+      "baseline_std": 0.010606303457978658,
+      "current_mean": 0.0021160760143810993,
+      "z_score": 0.004612974989997174,
+      "weight": 1.0,
+      "weighted_z": 0.004612974989997174,
+      "deviated": false
+    },
+    {
+      "name": "repetition_score",
+      "baseline_mean": 0.016663689074729572,
+      "baseline_std": 0.007952662226435349,
+      "current_mean": 0.011970465803986818,
+      "z_score": 0.5901449197889451,
+      "weight": 1.5,
+      "weighted_z": 0.8852173796834177,
+      "deviated": false
+    },
+    {
+      "name": "response_time_s",
+      "baseline_mean": 7.398482818603515,
+      "baseline_std": 1.7696017463624412,
+      "current_mean": 8.638663215637207,
+      "z_score": 0.7008245779101993,
+      "weight": 1.0,
+      "weighted_z": 0.7008245779101993,
+      "deviated": false
+    },
+    {
+      "name": "specificity_score",
+      "baseline_mean": 0.2730529889156223,
+      "baseline_std": 0.0973249621573868,
+      "current_mean": 0.2685644660765469,
+      "z_score": 0.04611892709708956,
+      "weight": 1.2,
+      "weighted_z": 0.05534271251650747,
+      "deviated": false
+    },
+    {
+      "name": "confidence_mismatch",
+      "baseline_mean": 0.08661537709931716,
+      "baseline_std": 0.03196586790424244,
+      "current_mean": 0.08259309357063245,
+      "z_score": 0.12583057429101815,
+      "weight": 1.5,
+      "weighted_z": 0.18874586143652722,
+      "deviated": false
+    },
+    {
+      "name": "assertion_density",
+      "baseline_mean": 0.632114441114441,
+      "baseline_std": 0.241958066654687,
+      "current_mean": 0.6268454089769879,
+      "z_score": 0.021776633480855186,
+      "weight": 1.2,
+      "weighted_z": 0.026131960177026223,
+      "deviated": false
+    },
+    {
+      "name": "self_consistency",
+      "baseline_mean": 0.2780175661266247,
+      "baseline_std": 0.2966528334443097,
+      "current_mean": 0.26789346844754913,
+      "z_score": 0.03412776327842957,
+      "weight": 1.0,
+      "weighted_z": 0.03412776327842957,
+      "deviated": false
+    }
+  ],
+  "baseline_label": "temp_gpt-4o-mini_0.7",
+  "test_label": "temp_gpt-4o-mini_1.2"
+}

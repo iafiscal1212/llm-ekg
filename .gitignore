@@ -18,3 +18,12 @@ calibrate_security.py
 exp*.png
 baseline_*.json
 demo_ekg_report.html
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz

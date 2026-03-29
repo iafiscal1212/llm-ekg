@@ -1,0 +1,16 @@
+[
+  {
+    "temperature": 0.2,
+    "baseline_temp": 0.7,
+    "status": "CLEAN",
+    "max_weighted_z": 1.173160572184958,
+    "n_deviated": 0
+  },
+  {
+    "temperature": 1.2,
+    "baseline_temp": 0.7,
+    "status": "CLEAN",
+    "max_weighted_z": 0.8852173796834177,
+    "n_deviated": 0
+  }
+]

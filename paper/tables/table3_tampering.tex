@@ -1,0 +1,20 @@
+\begin{table}[h]
+\centering\small
+\caption{System prompt tampering detection results. All tampering styles tested against the normal baseline of each model ($\sigma=3$).}
+\label{tab:tampering}
+\begin{tabular}{llcrrl}
+\toprule
+\textbf{Model} & \textbf{Style} & \textbf{Status} & \textbf{Max $w_z$} & \textbf{\#Dev} & \textbf{Top Deviations} \\
+\midrule
+gpt-4o-mini & brevity & \textcolor{red}{COMP.} & 18.0 & 8 & \scriptsize{length\_words(z=18.0), length\_chars(z=13.} \\
+gpt-4o-mini & hedging & \textcolor{red}{COMP.} & 6.2 & 7 & \scriptsize{hedge\_ratio(z=6.2), repetition\_score(z=4} \\
+gpt-4o-mini & format & \textcolor{red}{COMP.} & 14.5 & 5 & \scriptsize{length\_words(z=14.5), length\_chars(z=11.} \\
+claude-haiku & brevity & \textcolor{orange}{WARN} & 8.1 & 3 & \scriptsize{length\_words(z=8.1), length\_chars(z=6.5)} \\
+claude-haiku & hedging & \textcolor{red}{COMP.} & 12.5 & 4 & \scriptsize{hedge\_ratio(z=12.5), length\_words(z=4.3)} \\
+claude-haiku & format & \textcolor{orange}{WARN} & 3.8 & 2 & \scriptsize{length\_words(z=3.8), punctuation\_density} \\
+grok-3 & brevity & \textcolor{red}{COMP.} & 17.2 & 5 & \scriptsize{length\_words(z=17.2), length\_chars(z=13.} \\
+grok-3 & hedging & \textcolor{red}{COMP.} & 8.5 & 4 & \scriptsize{hedge\_ratio(z=8.5), length\_words(z=3.5),} \\
+grok-3 & format & \textcolor{green!60!black}{CLEAN} & 1.8 & 0 & \scriptsize{} \\
+\bottomrule
+\end{tabular}
+\end{table}

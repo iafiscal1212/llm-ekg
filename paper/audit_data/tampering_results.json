@@ -1,0 +1,74 @@
+[
+  {
+    "model": "gpt-4o-mini",
+    "style": "brevity",
+    "status": "COMPROMISED",
+    "max_weighted_z": 17.9566925746767,
+    "n_deviated": 8,
+    "top_deviations": "length_words(z=18.0), length_chars(z=13.8), vocab_diversity(z=7.2)"
+  },
+  {
+    "model": "gpt-4o-mini",
+    "style": "hedging",
+    "status": "COMPROMISED",
+    "max_weighted_z": 6.180065275586857,
+    "n_deviated": 7,
+    "top_deviations": "hedge_ratio(z=6.2), repetition_score(z=4.1), length_words(z=3.9)"
+  },
+  {
+    "model": "gpt-4o-mini",
+    "style": "format",
+    "status": "COMPROMISED",
+    "max_weighted_z": 14.471060372215241,
+    "n_deviated": 5,
+    "top_deviations": "length_words(z=14.5), length_chars(z=11.2), vocab_diversity(z=3.5)"
+  },
+  {
+    "model": "claude-haiku",
+    "style": "brevity",
+    "status": "WARNING",
+    "max_weighted_z": 8.079686241814219,
+    "n_deviated": 3,
+    "top_deviations": "length_words(z=8.1), length_chars(z=6.5), punctuation_density(z=3.9)"
+  },
+  {
+    "model": "claude-haiku",
+    "style": "hedging",
+    "status": "COMPROMISED",
+    "max_weighted_z": 12.476297417887057,
+    "n_deviated": 4,
+    "top_deviations": "hedge_ratio(z=12.5), length_words(z=4.3), sentence_count(z=4.0)"
+  },
+  {
+    "model": "claude-haiku",
+    "style": "format",
+    "status": "WARNING",
+    "max_weighted_z": 3.7753838646852,
+    "n_deviated": 2,
+    "top_deviations": "length_words(z=3.8), punctuation_density(z=3.2)"
+  },
+  {
+    "model": "grok-3",
+    "style": "brevity",
+    "status": "COMPROMISED",
+    "max_weighted_z": 17.16419595870071,
+    "n_deviated": 5,
+    "top_deviations": "length_words(z=17.2), length_chars(z=13.6), vocab_diversity(z=8.8)"
+  },
+  {
+    "model": "grok-3",
+    "style": "hedging",
+    "status": "COMPROMISED",
+    "max_weighted_z": 8.51915612562426,
+    "n_deviated": 4,
+    "top_deviations": "hedge_ratio(z=8.5), length_words(z=3.5), repetition_score(z=3.3)"
+  },
+  {
+    "model": "grok-3",
+    "style": "format",
+    "status": "CLEAN",
+    "max_weighted_z": 1.8083108640007663,
+    "n_deviated": 0,
+    "top_deviations": ""
+  }
+]

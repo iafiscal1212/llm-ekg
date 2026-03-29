@@ -1,0 +1,19 @@
+\begin{table*}[t]
+\centering\small
+\caption{Cross-model detectability matrix. Each cell shows the security status when the column model is tested against the row model's baseline ($\sigma=3$). Max weighted z-score in parentheses.}
+\label{tab:detectability}
+\begin{tabular}{lcccccccc}
+\toprule
+Baseline $\downarrow$ / Test $\rightarrow$ & \rotatebox{60}{gpt-4o-mini} & \rotatebox{60}{gpt-3.5-turbo} & \rotatebox{60}{gpt-4.1-mini} & \rotatebox{60}{claude-haiku} & \rotatebox{60}{claude-sonnet} & \rotatebox{60}{grok-3} & \rotatebox{60}{grok-3-mini} & \rotatebox{60}{gemini-2.0-flash} \\
+\midrule
+gpt-4o-mini & \cellcolor{gray!20}--- & \cellcolor{yellow!25}W(6.1) & \cellcolor{yellow!25}W(3.1) & \cellcolor{red!25}C(40.0) & \cellcolor{red!25}C(22.2) & \cellcolor{green!15}OK(2.4) & \cellcolor{yellow!25}W(5.0) & \cellcolor{red!25}C(162.5) \\
+gpt-3.5-turbo & \cellcolor{red!25}C(5.9) & \cellcolor{gray!20}--- & \cellcolor{yellow!25}W(11.6) & \cellcolor{red!25}C(42.3) & \cellcolor{red!25}C(22.1) & \cellcolor{red!25}C(11.1) & \cellcolor{red!25}C(16.4) & \cellcolor{red!25}C(108.2) \\
+gpt-4.1-mini & \cellcolor{yellow!25}W(3.5) & \cellcolor{yellow!25}W(4.1) & \cellcolor{gray!20}--- & \cellcolor{red!25}C(19.7) & \cellcolor{red!25}C(13.3) & \cellcolor{yellow!25}W(8.9) & \cellcolor{yellow!25}W(14.6) & \cellcolor{red!25}C(160.5) \\
+claude-haiku & \cellcolor{yellow!25}W(8.2) & \cellcolor{red!25}C(7.4) & \cellcolor{yellow!25}W(5.9) & \cellcolor{gray!20}--- & \cellcolor{yellow!25}W(6.4) & \cellcolor{red!25}C(10.0) & \cellcolor{red!25}C(15.2) & \cellcolor{red!25}C(146.6) \\
+claude-sonnet & \cellcolor{yellow!25}W(3.8) & \cellcolor{red!25}C(6.7) & \cellcolor{green!15}OK(2.8) & \cellcolor{yellow!25}W(3.8) & \cellcolor{gray!20}--- & \cellcolor{yellow!25}W(4.2) & \cellcolor{red!25}C(7.2) & \cellcolor{red!25}C(251.2) \\
+grok-3 & \cellcolor{green!15}OK(1.8) & \cellcolor{yellow!25}W(6.4) & \cellcolor{green!15}OK(2.0) & \cellcolor{red!25}C(44.9) & \cellcolor{red!25}C(24.2) & \cellcolor{gray!20}--- & \cellcolor{green!15}OK(1.7) & \cellcolor{red!25}C(143.1) \\
+grok-3-mini & \cellcolor{yellow!25}W(4.4) & \cellcolor{yellow!25}W(9.6) & \cellcolor{yellow!25}W(5.8) & \cellcolor{red!25}C(27.9) & \cellcolor{red!25}C(14.5) & \cellcolor{green!15}OK(2.3) & \cellcolor{gray!20}--- & \cellcolor{red!25}C(140.4) \\
+gemini-2.0-flash & \cellcolor{red!25}C(1441200000000.0) & \cellcolor{red!25}C(1904800000000.0) & \cellcolor{red!25}C(1267200000000.0) & \cellcolor{red!25}C(775600000000.0) & \cellcolor{red!25}C(828000000000.0) & \cellcolor{red!25}C(1505600000000.0) & \cellcolor{red!25}C(1605200000000.0) & \cellcolor{gray!20}--- \\
+\bottomrule
+\end{tabular}
+\end{table*}

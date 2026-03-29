@@ -1,0 +1,348 @@
+{
+  "matrix_z": [
+    [
+      0.0,
+      6.133325171029621,
+      3.103046758198387,
+      40.00612193486313,
+      22.169242336250395,
+      2.4371841291807987,
+      4.9800835432178,
+      162.4654286028926
+    ],
+    [
+      5.890585687153656,
+      0.0,
+      11.63125440973861,
+      42.2502298453707,
+      22.1216404608557,
+      11.054348474553592,
+      16.4420946071033,
+      108.22855247936366
+    ],
+    [
+      3.452327566134541,
+      4.074128891193374,
+      0.0,
+      19.73621712537175,
+      13.291170693515761,
+      8.884464298485577,
+      14.552225362688535,
+      160.52249314411705
+    ],
+    [
+      8.184587810809841,
+      7.355354485856673,
+      5.9053355090653294,
+      0.0,
+      6.442115412044807,
+      10.013524062507356,
+      15.229207650179795,
+      146.63424052469176
+    ],
+    [
+      3.8360980292459868,
+      6.736318261402608,
+      2.8249759129369116,
+      3.83082473964044,
+      0.0,
+      4.24350058095111,
+      7.245063843589195,
+      251.1911271770708
+    ],
+    [
+      1.7874404734561327,
+      6.446765899294602,
+      2.016530808473411,
+      44.901680181660794,
+      24.192449642390248,
+      0.0,
+      1.7389933127455746,
+      143.0722039393588
+    ],
+    [
+      4.414559451387249,
+      9.582169045629904,
+      5.787590587862708,
+      27.91148733911575,
+      14.549766612650066,
+      2.2541350049141515,
+      0.0,
+      140.39714805424092
+    ],
+    [
+      1441200000000.0,
+      1904800000000.0,
+      1267200000000.0002,
+      775600000000.0,
+      828000000000.0001,
+      1505600000000.0,
+      1605199999999.9998,
+      0.0
+    ]
+  ],
+  "matrix_status": [
+    [
+      "SELF",
+      "WARNING",
+      "WARNING",
+      "COMPROMISED",
+      "COMPROMISED",
+      "CLEAN",
+      "WARNING",
+      "COMPROMISED"
+    ],
+    [
+      "COMPROMISED",
+      "SELF",
+      "WARNING",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED"
+    ],
+    [
+      "WARNING",
+      "WARNING",
+      "SELF",
+      "COMPROMISED",
+      "COMPROMISED",
+      "WARNING",
+      "WARNING",
+      "COMPROMISED"
+    ],
+    [
+      "WARNING",
+      "COMPROMISED",
+      "WARNING",
+      "SELF",
+      "WARNING",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED"
+    ],
+    [
+      "WARNING",
+      "COMPROMISED",
+      "CLEAN",
+      "WARNING",
+      "SELF",
+      "WARNING",
+      "COMPROMISED",
+      "COMPROMISED"
+    ],
+    [
+      "CLEAN",
+      "WARNING",
+      "CLEAN",
+      "COMPROMISED",
+      "COMPROMISED",
+      "SELF",
+      "CLEAN",
+      "COMPROMISED"
+    ],
+    [
+      "WARNING",
+      "WARNING",
+      "WARNING",
+      "COMPROMISED",
+      "COMPROMISED",
+      "CLEAN",
+      "SELF",
+      "COMPROMISED"
+    ],
+    [
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED",
+      "COMPROMISED",
+      "SELF"
+    ]
+  ],
+  "matrix_ndev": [
+    [
+      0,
+      3,
+      1,
+      8,
+      7,
+      0,
+      1,
+      11
+    ],
+    [
+      5,
+      0,
+      3,
+      9,
+      10,
+      4,
+      4,
+      10
+    ],
+    [
+      1,
+      2,
+      0,
+      5,
+      4,
+      1,
+      2,
+      7
+    ],
+    [
+      3,
+      5,
+      3,
+      0,
+      1,
+      4,
+      5,
+      5
+    ],
+    [
+      2,
+      5,
+      0,
+      1,
+      0,
+      2,
+      4,
+      5
+    ],
+    [
+      0,
+      2,
+      0,
+      7,
+      7,
+      0,
+      0,
+      9
+    ],
+    [
+      1,
+      2,
+      2,
+      10,
+      9,
+      0,
+      0,
+      10
+    ],
+    [
+      16,
+      16,
+      16,
+      16,
+      16,
+      16,
+      16,
+      0
+    ]
+  ],
+  "model_names": [
+    "gpt-4o-mini",
+    "gpt-3.5-turbo",
+    "gpt-4.1-mini",
+    "claude-haiku",
+    "claude-sonnet",
+    "grok-3",
+    "grok-3-mini",
+    "gemini-2.0-flash"
+  ],
+  "tampering": [
+    {
+      "model": "gpt-4o-mini",
+      "style": "brevity",
+      "status": "COMPROMISED",
+      "max_weighted_z": 17.9566925746767,
+      "n_deviated": 8,
+      "top_deviations": "length_words(z=18.0), length_chars(z=13.8), vocab_diversity(z=7.2)"
+    },
+    {
+      "model": "gpt-4o-mini",
+      "style": "hedging",
+      "status": "COMPROMISED",
+      "max_weighted_z": 6.180065275586857,
+      "n_deviated": 7,
+      "top_deviations": "hedge_ratio(z=6.2), repetition_score(z=4.1), length_words(z=3.9)"
+    },
+    {
+      "model": "gpt-4o-mini",
+      "style": "format",
+      "status": "COMPROMISED",
+      "max_weighted_z": 14.471060372215241,
+      "n_deviated": 5,
+      "top_deviations": "length_words(z=14.5), length_chars(z=11.2), vocab_diversity(z=3.5)"
+    },
+    {
+      "model": "claude-haiku",
+      "style": "brevity",
+      "status": "WARNING",
+      "max_weighted_z": 8.079686241814219,
+      "n_deviated": 3,
+      "top_deviations": "length_words(z=8.1), length_chars(z=6.5), punctuation_density(z=3.9)"
+    },
+    {
+      "model": "claude-haiku",
+      "style": "hedging",
+      "status": "COMPROMISED",
+      "max_weighted_z": 12.476297417887057,
+      "n_deviated": 4,
+      "top_deviations": "hedge_ratio(z=12.5), length_words(z=4.3), sentence_count(z=4.0)"
+    },
+    {
+      "model": "claude-haiku",
+      "style": "format",
+      "status": "WARNING",
+      "max_weighted_z": 3.7753838646852,
+      "n_deviated": 2,
+      "top_deviations": "length_words(z=3.8), punctuation_density(z=3.2)"
+    },
+    {
+      "model": "grok-3",
+      "style": "brevity",
+      "status": "COMPROMISED",
+      "max_weighted_z": 17.16419595870071,
+      "n_deviated": 5,
+      "top_deviations": "length_words(z=17.2), length_chars(z=13.6), vocab_diversity(z=8.8)"
+    },
+    {
+      "model": "grok-3",
+      "style": "hedging",
+      "status": "COMPROMISED",
+      "max_weighted_z": 8.51915612562426,
+      "n_deviated": 4,
+      "top_deviations": "hedge_ratio(z=8.5), length_words(z=3.5), repetition_score(z=3.3)"
+    },
+    {
+      "model": "grok-3",
+      "style": "format",
+      "status": "CLEAN",
+      "max_weighted_z": 1.8083108640007663,
+      "n_deviated": 0,
+      "top_deviations": ""
+    }
+  ],
+  "temperature": [
+    {
+      "temperature": 0.2,
+      "baseline_temp": 0.7,
+      "status": "CLEAN",
+      "max_weighted_z": 1.173160572184958,
+      "n_deviated": 0
+    },
+    {
+      "temperature": 1.2,
+      "baseline_temp": 0.7,
+      "status": "CLEAN",
+      "max_weighted_z": 0.8852173796834177,
+      "n_deviated": 0
+    }
+  ]
+}
