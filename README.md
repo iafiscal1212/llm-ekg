@@ -102,6 +102,92 @@ import anthropic
 client = monitor.wrap_anthropic(anthropic.Anthropic())
 ```
 
+## Security Layer
+
+Detect **compromised models** by comparing against a known-good baseline.
+
+### Capture baseline
+
+```bash
+# Run against trusted model output to create baseline profile
+llm-ekg trusted_conversation.json --baseline baseline.json
+```
+
+### Security check
+
+```bash
+# Compare new output against baseline (default: 3 sigma threshold)
+llm-ekg new_conversation.json --security-check baseline.json
+
+# Adjust sensitivity
+llm-ekg new_conversation.json --security-check baseline.json --sigma 2.0
+```
+
+Output:
+```
+SECURITY: CLEAN (0/16 features deviated, threshold: 3.0 sigma)
+```
+
+or:
+```
+SECURITY: COMPROMISED (5/16 features deviated, threshold: 3.0 sigma)
+  ! hedge_ratio: baseline=0.0312 current=0.1847 z=6.42
+  ! repetition_score: baseline=0.0521 current=0.2103 z=4.88
+  ...
+```
+
+### Python API
+
+```python
+from llm_ekg import LLMAnalyzer, SecurityBaseline
+
+# 1. Build baseline from trusted session
+analyzer = LLMAnalyzer()
+for r in trusted_responses:
+    analyzer.ingest(r["text"])
+baseline = SecurityBaseline.from_analyzer(analyzer, model="gpt-4")
+baseline.save("gpt4_baseline.json")
+
+# 2. Check new session
+baseline = SecurityBaseline.load("gpt4_baseline.json")
+analyzer2 = LLMAnalyzer()
+for r in new_responses:
+    analyzer2.ingest(r["text"])
+report = baseline.check(analyzer2, sigma=3.0)
+print(report.status)  # "CLEAN", "WARNING", or "COMPROMISED"
+```
+
+### Live monitoring with security
+
+```python
+from llm_ekg import LiveMonitor
+
+monitor = LiveMonitor()
+client = monitor.wrap_openai(openai.OpenAI())
+
+# ... use client normally ...
+
+# Save baseline after trusted session
+monitor.save_baseline("baseline.json")
+
+# Later: check against baseline
+sec_report = monitor.security_check("baseline.json", sigma=3.0)
+print(sec_report.status)
+
+# Generate report with security section
+monitor.report("report.html", security_report=sec_report)
+```
+
+### How it works
+
+Security-sensitive features are weighted higher (1.5x for hedge_ratio, repetition_score, confidence_mismatch; 1.2x for vocab_diversity, specificity_score, assertion_density). A backdoored model changes these signals before the semantic content shifts — the math catches it first.
+
+| Status | Meaning |
+|--------|---------|
+| **CLEAN** | All features within baseline |
+| **WARNING** | 1-3 features deviated |
+| **COMPROMISED** | 4+ features with significant drift |
+
 ## What It Detects
 
 | Signal | Meaning |

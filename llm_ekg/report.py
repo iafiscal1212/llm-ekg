@@ -56,8 +56,9 @@ def _setup_ax(ax, title=""):
 class EKGReport:
     """Generates self-contained HTML report from LLMAnalyzer results."""
 
-    def __init__(self, analyzer):
+    def __init__(self, analyzer, security_report=None):
         self.analyzer = analyzer
+        self._security_report = security_report
 
     def generate(self, output_path: str = "llm_ekg_report.html"):
         a = self.analyzer
@@ -65,6 +66,8 @@ class EKGReport:
 
         sections = []
         sections.append(self._section_summary(summary))
+        if self._security_report is not None:
+            sections.append(self._section_security(self._security_report))
         sections.append(self._section_hallucination(summary))
         sections.append(self._section_ekg_temporal())
         sections.append(self._section_behavioral_metrics())
@@ -515,6 +518,124 @@ class EKGReport:
                 {items}
             </ul>
             <p class="caption">Each metric is compared against its own distribution within the session.</p>
+        </div>
+        """
+
+    def _section_security(self, sec_report) -> str:
+        """Security status section with radar chart and deviation table."""
+        status = sec_report.status
+        n_dev = sec_report.n_deviated
+        sigma = sec_report.sigma_threshold
+        devs = sec_report.deviations
+
+        if status == "CLEAN":
+            color = _GREEN
+        elif status == "WARNING":
+            color = _YELLOW
+        else:
+            color = _RED
+
+        # Radar chart: baseline vs current (normalized to baseline range)
+        names = [d["name"] for d in devs]
+        n = len(names)
+        if n > 0:
+            # Normalize: z_score per feature (capped at 5 for visualization)
+            z_scores = [min(d["weighted_z"], 5.0) for d in devs]
+            # Threshold line at sigma
+            threshold = [sigma] * n
+
+            angles = np.linspace(0, 2 * np.pi, n, endpoint=False).tolist()
+            z_scores_closed = z_scores + [z_scores[0]]
+            threshold_closed = threshold + [threshold[0]]
+            angles_closed = angles + [angles[0]]
+
+            fig, ax = plt.subplots(figsize=(8, 8), facecolor=_BG,
+                                   subplot_kw=dict(projection='polar'))
+            ax.set_facecolor(_BG)
+
+            # Threshold circle
+            ax.plot(angles_closed, threshold_closed, color=_FG, linewidth=1,
+                    linestyle=':', alpha=0.4, label=f'{sigma}\u03c3 threshold')
+            ax.fill(angles_closed, threshold_closed, alpha=0.03, color=_FG)
+
+            # Current deviation
+            dev_colors = [_RED if d["deviated"] else _GREEN for d in devs]
+            ax.plot(angles_closed, z_scores_closed, color=_CYAN, linewidth=1.5)
+            ax.fill(angles_closed, z_scores_closed, alpha=0.1, color=_CYAN)
+
+            # Mark deviated features
+            for i, d in enumerate(devs):
+                if d["deviated"]:
+                    ax.plot(angles[i], z_scores[i], 'o', color=_RED,
+                            markersize=8, zorder=5)
+
+            # Labels
+            short_names = [n.replace("_", "\n") for n in names]
+            ax.set_xticks(angles)
+            ax.set_xticklabels(short_names, fontsize=7, color=_FG)
+            ax.tick_params(axis='y', colors=_FG, labelsize=7)
+            ax.set_title("Security Deviation Radar", color=_FG, fontsize=12,
+                         fontweight='bold', pad=20)
+            ax.legend(loc='upper right', fontsize=8, framealpha=0.3,
+                      labelcolor=_FG, facecolor=_BG, edgecolor=_GRID)
+
+            img = _fig_to_base64(fig)
+            radar_html = f'<img src="data:image/png;base64,{img}" class="chart">'
+        else:
+            radar_html = "<p>No feature data available.</p>"
+
+        # Deviation table
+        rows = []
+        for d in devs:
+            st = "DEVIATED" if d["deviated"] else "OK"
+            st_color = _RED if d["deviated"] else _GREEN
+            rows.append(
+                f'<tr>'
+                f'<td>{d["name"]}</td>'
+                f'<td>{d["baseline_mean"]:.4f}</td>'
+                f'<td>{d["current_mean"]:.4f}</td>'
+                f'<td>{d["z_score"]:.2f}</td>'
+                f'<td>{d["weight"]:.1f}</td>'
+                f'<td>{d["weighted_z"]:.2f}</td>'
+                f'<td style="color:{st_color};font-weight:bold">{st}</td>'
+                f'</tr>'
+            )
+        table_rows = "\n".join(rows)
+
+        return f"""
+        <div class="section">
+            <h2>Security Status</h2>
+            <div class="summary-grid">
+                <div class="metric-card">
+                    <div class="metric-value" style="color:{color}; font-size:36px">{status}</div>
+                    <div class="metric-label">Security Verdict</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color:{color}">{n_dev}/{len(devs)}</div>
+                    <div class="metric-label">Features Deviated</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">{sigma}\u03c3</div>
+                    <div class="metric-label">Threshold</div>
+                </div>
+            </div>
+            {radar_html}
+            <table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:11px;">
+                <thead>
+                    <tr style="border-bottom:1px solid {_GRID}; color:{_CYAN};">
+                        <th style="text-align:left; padding:6px;">Feature</th>
+                        <th>Baseline</th>
+                        <th>Current</th>
+                        <th>Z-score</th>
+                        <th>Weight</th>
+                        <th>Weighted Z</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_rows}
+                </tbody>
+            </table>
         </div>
         """
 

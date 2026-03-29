@@ -344,12 +344,26 @@ class LiveMonitor:
 
         return _ClientProxy(client)
 
+    def save_baseline(self, path: str, model: str = ""):
+        """Save current session as a security baseline."""
+        from .security import SecurityBaseline
+        bl = SecurityBaseline.from_analyzer(self.analyzer, model=model)
+        bl.save(path)
+        return bl
+
+    def security_check(self, baseline_path: str, sigma: float = 3.0):
+        """Compare current session against a saved baseline."""
+        from .security import SecurityBaseline
+        bl = SecurityBaseline.load(baseline_path)
+        return bl.check(self.analyzer, sigma=sigma)
+
     def summary(self) -> dict:
         return self.analyzer.get_summary()
 
-    def report(self, output_path: str = "llm_ekg_report.html"):
+    def report(self, output_path: str = "llm_ekg_report.html",
+               security_report=None):
         from .report import EKGReport
-        r = EKGReport(self.analyzer)
+        r = EKGReport(self.analyzer, security_report=security_report)
         r.generate(output_path)
         print(f"Report generated: {output_path} ({self._count} responses)")
 
@@ -394,10 +408,25 @@ def main():
         "--n-scales", type=int, default=6,
         help="Number of analysis scales (default: 6)",
     )
+    parser.add_argument(
+        "--baseline",
+        metavar="OUTPUT_PATH",
+        help="Capture security baseline and save to JSON file",
+    )
+    parser.add_argument(
+        "--security-check",
+        metavar="BASELINE_PATH",
+        help="Compare against a saved security baseline",
+    )
+    parser.add_argument(
+        "--sigma", type=float, default=3.0,
+        help="Deviation threshold in sigmas for security check (default: 3.0)",
+    )
 
     args = parser.parse_args()
 
-    print("LLM EKG v1.0")
+    from . import __version__
+    print(f"LLM EKG v{__version__}")
     print(f"Input: {args.input}")
 
     responses = parse_input(args.input, args.format)
@@ -429,8 +458,36 @@ def main():
     if summary.get("multiscale") and summary["multiscale"].get("mean_hurst"):
         print(f"Mean persistence: {summary['multiscale']['mean_hurst']:.3f}")
 
+    # Security: capture baseline
+    sec_report = None
+    if args.baseline:
+        from .security import SecurityBaseline
+        bl = SecurityBaseline.from_analyzer(analyzer)
+        bl.save(args.baseline)
+        print(f"\nBaseline saved: {args.baseline} ({summary['n_responses']} responses)")
+
+    # Security: check against baseline
+    if args.security_check:
+        from .security import SecurityBaseline
+        bl = SecurityBaseline.load(args.security_check)
+        sec_report = bl.check(analyzer, sigma=args.sigma)
+        status_color = {
+            "CLEAN": "\033[32m",
+            "WARNING": "\033[33m",
+            "COMPROMISED": "\033[31m",
+        }
+        reset = "\033[0m"
+        c = status_color.get(sec_report.status, "")
+        print(f"\nSECURITY: {c}{sec_report.status}{reset} "
+              f"({sec_report.n_deviated}/{len(sec_report.deviations)} features deviated, "
+              f"threshold: {sec_report.sigma_threshold}\u03c3)")
+        for d in sec_report.deviations:
+            if d["deviated"]:
+                print(f"  ! {d['name']}: baseline={d['baseline_mean']:.4f} "
+                      f"current={d['current_mean']:.4f} z={d['weighted_z']:.2f}")
+
     from .report import EKGReport
-    report = EKGReport(analyzer)
+    report = EKGReport(analyzer, security_report=sec_report)
     report.generate(args.output)
     print(f"\nReport: {args.output}")
 
